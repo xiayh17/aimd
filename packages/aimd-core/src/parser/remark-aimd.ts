@@ -268,12 +268,7 @@ function registerStep(node: AimdStepNode, context: StepContext): void {
  * - name: int = 0, title="Title", description="Desc"
  * - name: list[Student], subvars=[a, b]
  */
-function parseVarDefinition(content: string): AimdVarDefinition & {
-  subvars?: string[]
-  subvarDefs?: Record<string, AimdVarDefinition>
-  title?: string
-  description?: string
-} {
+function parseVarDefinition(content: string): AimdVarDefinition {
   const trimmed = content.trim()
 
   // Check for subvars first
@@ -281,7 +276,6 @@ function parseVarDefinition(content: string): AimdVarDefinition & {
   // Handle nested brackets in patterns like [^\]]
   const subvarsStart = trimmed.indexOf("subvars")
   let subvarsContent: string | undefined
-  let subvars: string[] | undefined
   let subvarDefs: Record<string, AimdVarDefinition> | undefined
 
   if (subvarsStart !== -1) {
@@ -313,20 +307,17 @@ function parseVarDefinition(content: string): AimdVarDefinition & {
     // Parse subvars - can be simple names or typed definitions
     // eslint-disable-next-line regexp/no-super-linear-backtracking
     const subvarParts = subvarsContent.split(/,\s*(?![^(]*\))/).map(s => s.trim()).filter(Boolean)
-    subvars = []
     subvarDefs = {}
 
     for (const part of subvarParts) {
       // Check if it's a typed definition (contains :)
       if (part.includes(":")) {
         const subDef = parseSimpleVarDef(part)
-        subvars.push(subDef.id)
         subvarDefs[subDef.id] = subDef
       }
       else {
         // Simple name
         const name = part.replace(/^var\s*\(\s*|\s*\)$/g, "").trim()
-        subvars.push(name)
         subvarDefs[name] = { id: name }
       }
     }
@@ -346,15 +337,12 @@ function parseVarDefinition(content: string): AimdVarDefinition & {
   // Parse the main var definition
   const def = parseSimpleVarDef(contentWithoutSubvars)
 
-  // Parse additional kwargs (title, description, etc.)
-  const kvParams = parseKeyValueParams(contentWithoutSubvars)
-
-  return {
-    ...def,
-    subvars: subvarDefs,
-    title: kvParams.title ? String(kvParams.title) : undefined,
-    description: kvParams.description ? String(kvParams.description) : undefined,
-  } as AimdVarDefinition
+  return subvarDefs
+    ? {
+      ...def,
+      subvars: subvarDefs,
+    }
+    : def
 }
 
 /**
@@ -710,6 +698,14 @@ function createAimdNode(
         refs,
       } as AimdCiteNode
     }
+
+    case "fig":
+      throw new Error("Inline fig syntax is not supported. Use a fig code block instead.")
+
+    default: {
+      const exhaustiveCheck: never = fieldType
+      throw new Error(`Unsupported AIMD field type: ${String(exhaustiveCheck)}`)
+    }
   }
 }
 
@@ -717,9 +713,11 @@ function createAimdNode(
  * Find and replace AIMD syntax in text nodes
  * Pattern: {{type|content}}
  */
-function processTextNode(node: Text, stepContext: StepContext): PhrasingContent[] {
+type InlineContentNode = PhrasingContent | AimdNode
+
+function processTextNode(node: Text, stepContext: StepContext): InlineContentNode[] {
   const { value } = node
-  const result: PhrasingContent[] = []
+  const result: InlineContentNode[] = []
   let lastIndex = 0
 
   // Pattern matches: {{type|content}}
@@ -866,7 +864,8 @@ const remarkAimd: Plugin<[RemarkAimdOptions?], Root> = (options = {}) => {
         return
 
       // Replace node
-      parent.children.splice(index, 1, ...processed)
+      // AIMD introduces custom mdast nodes, so we cast when splicing into the tree.
+      parent.children.splice(index, 1, ...(processed as unknown as PhrasingContent[]))
 
       // Collect field information
       if (extractFields) {
@@ -883,31 +882,26 @@ const remarkAimd: Plugin<[RemarkAimdOptions?], Root> = (options = {}) => {
                 if (!fields.var_table.find(t => t.name === aimdNode.name)) {
                   const tableNode = aimdNode as AimdVarTableNode
                   const def = tableNode.definition
-                  // def.subvars is Record<string, AimdVarDefinition> (object), not array; columns may be non-array at runtime
-                  const namesSource = def?.subvars ?? tableNode.columns ?? []
-                  const names = Array.isArray(namesSource)
-                    ? namesSource
-                    : namesSource && typeof namesSource === "object"
-                      ? Object.keys(namesSource)
-                      : []
+                  const subvarDefs = def?.subvars
+                  const names = subvarDefs ? Object.keys(subvarDefs) : tableNode.columns
                   const subvars = names.map((name: string) => {
-                    const subDef = def?.subvars && typeof def.subvars === "object" && !Array.isArray(def.subvars) ? def.subvars[name] : undefined
+                    const subDef = subvarDefs?.[name]
+                    const title = typeof subDef?.kwargs?.title === "string" ? subDef.kwargs.title : undefined
+                    const description = typeof subDef?.kwargs?.description === "string" ? subDef.kwargs.description : undefined
                     return subDef
                       ? {
                         name,
                         type: subDef.type,
                         default: subDef.default,
-                        title: subDef.title || name,
-                        description: subDef.description,
+                        title: title || name,
+                        description,
                         kwargs: subDef.kwargs, // Include kwargs (pattern, etc.)
                       }
                       : { name }
                   })
-                  const columns = Array.isArray(tableNode.columns) ? tableNode.columns : []
                   fields.var_table.push({
                     name: aimdNode.name,
                     scope: "rt",
-                    columns,
                     // Extended fields for full AimdVarTableField compatibility
                     subvars,
                     type_annotation: def?.type,

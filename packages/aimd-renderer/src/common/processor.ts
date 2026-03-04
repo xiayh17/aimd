@@ -1,4 +1,4 @@
-import type { Element, Root as HastRoot, Text as HastText } from "hast"
+import type { Element, Properties, Root as HastRoot, Text as HastText } from "hast"
 import type { VFile } from "vfile"
 import type { VNode } from "vue"
 import type {
@@ -361,7 +361,7 @@ function aimdHandler(state: any, node: AimdNode): Element {
   }
 
   // Build properties
-  const properties: Record<string, unknown> = {
+  const properties: Properties = {
     "className": [baseClass, modifierClass],
     "data-aimd-type": node.fieldType,
     "data-aimd-name": node.name,
@@ -461,7 +461,7 @@ export function createHtmlProcessor(options: ProcessorOptions = {}) {
         // Custom handler for AIMD nodes
         aimd: aimdHandler,
       },
-    })
+    } as any)
     .use(rehypeRaw)
 
   // Math formula rendering
@@ -587,7 +587,7 @@ export function renderToHtmlSync(
       handlers: {
         aimd: aimdHandler,
       },
-    })
+    } as any)
     .use(rehypeRaw)
 
   const file: VFile = { data: {} } as VFile

@@ -1,7 +1,7 @@
 import type { Element, Root as HastRoot, Text as HastText, RootContent } from "hast"
 import type { Component, VNode, VNodeChild } from "vue"
 import type { AimdNode, AimdStepNode, RenderContext } from "@airalogy/aimd-core/types"
-import { defineComponent, Fragment, h } from "vue"
+import { Fragment, h } from "vue"
 
 /**
  * Extended Element data type
@@ -190,38 +190,41 @@ const defaultAimdRenderers: Record<string, AimdComponentRenderer> = {
       ])
     }
 
-    // Edit mode: create reactive checkbox component
-    return defineComponent({
-      setup() {
-        return () => {
-          const checked = ctx.value?.[scope]?.[name]?.checked ?? false
+    const scopeValue = ctx.value?.[scope]?.[name]
+    const checked = typeof scopeValue === "object" && scopeValue !== null && "checked" in scopeValue
+      ? Boolean((scopeValue as Record<string, unknown>).checked)
+      : false
 
-          return h("label", {
-            "class": "aimd-field aimd-field--check aimd-field--editable",
-            "data-aimd-type": "check",
-            "data-aimd-name": name,
-            "id": `rc-${name}`,
-          }, [
-            h("input", {
-              type: "checkbox",
-              checked,
-              disabled: ctx.readonly,
-              class: "aimd-checkbox",
-              onChange: (e: Event) => {
-                if (ctx.value && scope in ctx.value) {
-                  if (!ctx.value[scope][name]) {
-                    ctx.value[scope][name] = {}
-                  }
-                  ctx.value[scope][name].checked = (e.target as HTMLInputElement).checked
-                }
-              },
-            }),
-            h("span", { class: "aimd-field__label" }, label),
-            children && children.length > 0 ? children : null,
-          ])
-        }
-      },
-    })()
+    return h("label", {
+      "class": "aimd-field aimd-field--check aimd-field--editable",
+      "data-aimd-type": "check",
+      "data-aimd-name": name,
+      "id": `rc-${name}`,
+    }, [
+      h("input", {
+        type: "checkbox",
+        checked,
+        disabled: ctx.readonly,
+        class: "aimd-checkbox",
+        onChange: (e: Event) => {
+          if (!ctx.value)
+            return
+
+          const scopeValues = (ctx.value[scope] ??= {})
+          const nextChecked = (e.target as HTMLInputElement).checked
+          const currentValue = scopeValues[name]
+
+          if (typeof currentValue === "object" && currentValue !== null) {
+            (currentValue as Record<string, unknown>).checked = nextChecked
+          }
+          else {
+            scopeValues[name] = { checked: nextChecked }
+          }
+        },
+      }),
+      h("span", { class: "aimd-field__label" }, label),
+      children && children.length > 0 ? children : null,
+    ])
   },
 
   ref_step: (node, ctx) => {
@@ -443,7 +446,7 @@ function preprocessFigures(node: HastRoot | RootContent, figCtx: FigureContext):
 /**
  * Parse AIMD node from HAST element properties
  */
-function parseAimdFromProps(props: Record<string, unknown>): AimdNode | null {
+function parseAimdFromProps(props: Record<string, unknown>): AimdNode | undefined {
   // Try to get from JSON attribute first
   const jsonData = props["data-aimd-json"] || props.dataAimdJson
   if (jsonData && typeof jsonData === "string") {
@@ -462,7 +465,7 @@ function parseAimdFromProps(props: Record<string, unknown>): AimdNode | null {
   const raw = (props["data-aimd-raw"] || props.dataAimdRaw) as string
 
   if (!fieldType || !name) {
-    return null
+    return undefined
   }
 
   const baseNode = {
@@ -528,6 +531,10 @@ function convertProperties(properties: Record<string, unknown>): Record<string, 
   }
 
   return props
+}
+
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  return typeof value === "object" && value !== null && "then" in value
 }
 
 /**
@@ -615,7 +622,7 @@ export function hastToVue(
 
         // Add figure number to ref_fig references
         if (aimdData.fieldType === "ref_fig" && figCtx) {
-          const refTarget = "refTarget" in aimdData ? (aimdData as any).refTarget : aimdData.name
+          const refTarget = aimdData.refTarget
           const sequence = figCtx.figureNumbers.get(refTarget)
           if (sequence !== undefined) {
             (aimdData as any).figureNumber = sequence + 1
@@ -629,6 +636,10 @@ export function hastToVue(
             .map(child => hastToVue(child, options, figCtx))
             .filter(Boolean)
           const result = renderer(aimdData, context, childVNodes)
+          if (isPromiseLike<VNode>(result)) {
+            // This traversal is synchronous; async custom renderers are ignored here.
+            return null
+          }
           if (result) {
             return result
           }

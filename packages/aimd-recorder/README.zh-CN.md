@@ -15,7 +15,6 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-renderer @airalogy/aimd-core
 ## 功能特性
 
 -  **样式** - AIMD 元素和编辑器 UI 的预构建 CSS
- -  **版本常量** - 导出 `AIMD_EDITOR_VERSION` 便于调试/版本检查
 
 ## 使用
 
@@ -25,18 +24,11 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-renderer @airalogy/aimd-core
 import '@airalogy/aimd-recorder/styles'
 ```
 
-### 版本
-
-```typescript
-import { AIMD_EDITOR_VERSION } from '@airalogy/aimd-recorder'
-```
-
 ## 导出
 
 ### 主入口（`@airalogy/aimd-recorder`）
 
 - 默认会副作用导入 `./styles/aimd.css`（也可通过 `@airalogy/aimd-recorder/styles` 单独导入）
-- `AIMD_EDITOR_VERSION`
 
 ### 组件入口（`@airalogy/aimd-recorder/components`）
 

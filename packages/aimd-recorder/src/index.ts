@@ -11,5 +11,3 @@ import './styles/aimd.css'
 
 // Note: Actual component exports will be added as components are migrated
 // For now, this serves as a placeholder for the editor package structure
-
-export const AIMD_EDITOR_VERSION = '1.0.0'

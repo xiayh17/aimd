@@ -45,4 +45,9 @@ export type {
   AimdVarTableNode,
   BaseNode,
   IndentNode,
+  ProcessorOptions,
+  RenderContext,
+  RenderMode,
+  RenderNode,
+  TokenRenderRule,
 } from './nodes'

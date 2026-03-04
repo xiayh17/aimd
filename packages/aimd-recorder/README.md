@@ -15,7 +15,6 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-renderer @airalogy/aimd-core
 ## Features
 
 -  **Styles** - Pre-built CSS for AIMD elements and editor UI
- -  **Version Constant** - `AIMD_EDITOR_VERSION` exported for debugging/version checks
 
 ## Usage
 
@@ -25,18 +24,11 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-renderer @airalogy/aimd-core
 import '@airalogy/aimd-recorder/styles'
 ```
 
-### Version
-
-```typescript
-import { AIMD_EDITOR_VERSION } from '@airalogy/aimd-recorder'
-```
-
 ## Exports
 
 ### Main Entry (`@airalogy/aimd-recorder`)
 
 - Side-effect import of `./styles/aimd.css` (also available via `@airalogy/aimd-recorder/styles`)
-- `AIMD_EDITOR_VERSION`
 
 ### Components Entry (`@airalogy/aimd-recorder/components`)
 
