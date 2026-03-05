@@ -342,6 +342,50 @@ function pad2(value: number): string {
   return String(value).padStart(2, "0")
 }
 
+function formatTimezoneOffset(date: Date): string {
+  const totalMinutes = -date.getTimezoneOffset()
+  const sign = totalMinutes >= 0 ? "+" : "-"
+  const absMinutes = Math.abs(totalMinutes)
+  const hours = Math.floor(absMinutes / 60)
+  const minutes = absMinutes % 60
+  return `${sign}${pad2(hours)}:${pad2(minutes)}`
+}
+
+function formatDateTimeWithTimezone(date: Date): string {
+  const year = date.getFullYear()
+  const month = pad2(date.getMonth() + 1)
+  const day = pad2(date.getDate())
+  const hour = pad2(date.getHours())
+  const minute = pad2(date.getMinutes())
+  return `${year}-${month}-${day}T${hour}:${minute}${formatTimezoneOffset(date)}`
+}
+
+function normalizeDateTimeValueWithTimezone(value: unknown): unknown {
+  const normalized = unwrapStructuredValue(value)
+
+  if (typeof normalized === "string") {
+    const text = normalized.trim()
+    if (!text) {
+      return ""
+    }
+
+    const normalizedText = text.replace(" ", "T")
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(normalizedText)) {
+      return normalizedText
+    }
+
+    const parsed = new Date(normalizedText)
+    return Number.isNaN(parsed.getTime()) ? value : formatDateTimeWithTimezone(parsed)
+  }
+
+  if (normalized === null || typeof normalized === "undefined") {
+    return ""
+  }
+
+  const parsed = toDateValue(normalized)
+  return parsed ? formatDateTimeWithTimezone(parsed) : value
+}
+
 function formatDateForInput(value: unknown, kind: "date" | "datetime" | "time"): string {
   const normalized = unwrapStructuredValue(value)
 
@@ -408,12 +452,17 @@ function getVarInputDisplayValue(value: unknown, kind: VarInputKind): string | n
 }
 
 function parseVarInputValue(rawValue: string, type: string | undefined, kind: VarInputKind): unknown {
+  const normalizedType = normalizeVarTypeName(type)
+
+  if (kind === "datetime") {
+    return normalizeDateTimeValueWithTimezone(rawValue)
+  }
+
   if (kind === "number") {
     const text = rawValue.trim()
     if (!text) {
       return ""
     }
-    const normalizedType = normalizeVarTypeName(type)
     const parsed = normalizedType === "int" || normalizedType === "integer"
       ? Number.parseInt(text, 10)
       : Number.parseFloat(text)
@@ -449,7 +498,7 @@ function getVarInitialValue(node: AimdVarNode, type: string | undefined): unknow
   }
 
   if (normalizedType === "currenttime") {
-    return formatDateForInput(resolveNowDate(), "datetime")
+    return formatDateTimeWithTimezone(resolveNowDate())
   }
 
   if (normalizedType === "username" && typeof props.currentUserName === "string") {
@@ -740,6 +789,13 @@ function renderInlineVar(node: AimdVarNode): VNode {
   if (!(id in localRecord.var)) {
     localRecord.var[id] = getVarInitialValue(node, type)
     recordInitializedDuringRender = true
+  }
+  if (inputKind === "datetime") {
+    const normalizedDateTime = normalizeDateTimeValueWithTimezone(localRecord.var[id])
+    if (normalizedDateTime !== localRecord.var[id]) {
+      localRecord.var[id] = normalizedDateTime
+      recordInitializedDuringRender = true
+    }
   }
 
   const htmlInputType = inputKind === "datetime" ? "datetime-local" : inputKind

@@ -5,7 +5,7 @@
  * Components will be migrated from apps/web/src/components/custom/aimd
  */
 
-import AimdRecorder from "./AimdProtocolRecorder.vue"
+import AimdRecorder from "./AimdRecorder.vue"
 import AimdQuizRecorder from "./AimdQuizRecorder.vue"
 
 export { AimdRecorder, AimdQuizRecorder }
