@@ -1,6 +1,6 @@
 # @airalogy/aimd-recorder
 
-AIMD 记录 UI 组件与样式集合，包含可复用题目作答控件。
+AIMD 记录 UI 组件与样式集合，包含协议内联录入组件与可复用题目作答控件。
 
 ## 安装
 
@@ -9,6 +9,38 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
 ```
 
 ## 快速开始
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import {
+  AimdProtocolRecorder,
+  createEmptyProtocolRecordData,
+  type AimdProtocolRecordData,
+} from "@airalogy/aimd-recorder"
+import "@airalogy/aimd-recorder/styles"
+
+const content = ref("# Protocol\\n\\n样本名：{{var|sample_name: str}}")
+const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
+</script>
+
+<template>
+  <AimdProtocolRecorder v-model="record" :content="content" />
+</template>
+```
+
+`record` 数据结构：
+
+```json
+{
+  "var": {},
+  "step": {},
+  "check": {},
+  "quiz": {}
+}
+```
+
+### 仅题目控件
 
 ```vue
 <script setup lang="ts">

@@ -1,6 +1,6 @@
 # @airalogy/aimd-recorder
 
-Reusable recording UI for AIMD, including quiz answer components and styles.
+Reusable recording UI for AIMD, including inline protocol recorder, quiz answer components, and styles.
 
 ## Install
 
@@ -9,6 +9,38 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
 ```
 
 ## Quick Start
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import {
+  AimdProtocolRecorder,
+  createEmptyProtocolRecordData,
+  type AimdProtocolRecordData,
+} from "@airalogy/aimd-recorder"
+import "@airalogy/aimd-recorder/styles"
+
+const content = ref("# Protocol\\n\\nSample: {{var|sample_name: str}}")
+const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
+</script>
+
+<template>
+  <AimdProtocolRecorder v-model="record" :content="content" />
+</template>
+```
+
+`record` shape:
+
+```json
+{
+  "var": {},
+  "step": {},
+  "check": {},
+  "quiz": {}
+}
+```
+
+### Quiz Recorder Only
 
 ```vue
 <script setup lang="ts">

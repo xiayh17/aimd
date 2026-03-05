@@ -1,6 +1,6 @@
 # @airalogy/aimd-recorder
 
-`@airalogy/aimd-recorder` 提供记录场景所需的样式与可复用输入控件。
+`@airalogy/aimd-recorder` 提供 AIMD 记录场景的样式与 Vue 录入组件。
 
 ## 安装
 
@@ -10,11 +10,44 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
 
 ## 核心能力
 
-- 通过 `@airalogy/aimd-recorder/styles` 提供记录 UI 样式。
-- 导出可复用题目控件 `AimdQuizRecorder`。
-- 支持 `choice`、`blank`、`open` 三类作答输入。
+- 通过 `@airalogy/aimd-recorder/styles` 提供 recorder 样式。
+- 提供协议内联录入组件 `AimdProtocolRecorder`：
+  在 Markdown 渲染位置直接插入 `var / var_table / step / check / quiz` 的记录控件。
+- 提供可复用题目控件 `AimdQuizRecorder`（单独使用 quiz 输入时可复用）。
 
-## 示例
+## 协议内联录入示例（推荐）
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import {
+  AimdProtocolRecorder,
+  createEmptyProtocolRecordData,
+  type AimdProtocolRecordData,
+} from "@airalogy/aimd-recorder"
+import "@airalogy/aimd-recorder/styles"
+
+const content = ref("# Protocol\n\n样本名：{{var|sample_name: str}}")
+const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
+</script>
+
+<template>
+  <AimdProtocolRecorder v-model="record" :content="content" />
+</template>
+```
+
+`record` 数据结构：
+
+```json
+{
+  "var": {},
+  "step": {},
+  "check": {},
+  "quiz": {}
+}
+```
+
+## 仅题目控件示例
 
 ```vue
 <script setup lang="ts">

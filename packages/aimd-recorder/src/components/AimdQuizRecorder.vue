@@ -17,6 +17,7 @@ type StemSegment = StemTextSegment | StemBlankSegment
 const props = defineProps<{
   quiz: AimdQuizField
   modelValue: unknown
+  readonly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -144,6 +145,7 @@ const openValue = computed<string>({
             class="aimd-quiz-recorder__blank-input"
             type="text"
             :placeholder="segment.key"
+            :readonly="readonly"
             :value="getBlankValue(segment.key)"
             @input="setBlankValue(segment.key, ($event.target as HTMLInputElement).value)"
           />
@@ -159,6 +161,7 @@ const openValue = computed<string>({
           class="aimd-quiz-recorder__choice-input"
           :name="`${quiz.id}-single`"
           :value="option.key"
+          :disabled="readonly"
         />
         <span>{{ option.key }}. {{ option.text }}</span>
       </label>
@@ -169,6 +172,7 @@ const openValue = computed<string>({
         <input
           type="checkbox"
           class="aimd-quiz-recorder__choice-input"
+          :disabled="readonly"
           :checked="isMultipleChecked(option.key)"
           @change="toggleMultipleChoice(option.key, ($event.target as HTMLInputElement).checked)"
         />
@@ -182,6 +186,7 @@ const openValue = computed<string>({
       class="aimd-quiz-recorder__open-input"
       placeholder="Input your answer..."
       rows="4"
+      :readonly="readonly"
     />
   </div>
 </template>

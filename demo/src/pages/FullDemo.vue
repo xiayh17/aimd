@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { ref, reactive, watch, computed, onMounted, onBeforeUnmount, shallowRef, nextTick } from 'vue'
+import { ref, watch, computed, onMounted, onBeforeUnmount, shallowRef } from 'vue'
 import { useMonaco } from '../composables/useMonaco'
 import { renderToHtml, parseAndExtract } from '@airalogy/aimd-renderer'
+import {
+  AimdProtocolRecorder,
+  createEmptyProtocolRecordData,
+  type AimdProtocolRecordData,
+} from '@airalogy/aimd-recorder'
 import '@airalogy/aimd-recorder/styles'
 import { SAMPLE_AIMD } from '../composables/sampleContent'
 
@@ -44,11 +49,7 @@ const fields = ref<any>({})
 const renderError = ref('')
 
 // --- Record Data ---
-const recordData = reactive<Record<string, Record<string, any>>>({
-  research_variable: {},
-  research_step: {},
-  research_check: {},
-})
+const recordData = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 
 // Active panel on the right side
 const activeRightTab = ref<'preview' | 'form' | 'data'>('preview')
@@ -61,24 +62,6 @@ async function processContent() {
 
     const extracted = parseAndExtract(content.value)
     fields.value = extracted
-
-    // Initialize record data for new fields
-    extracted.var?.forEach((v: any) => {
-      if (!(v.name in recordData.research_variable)) {
-        const def = v.definition
-        recordData.research_variable[v.name] = def?.default ?? ''
-      }
-    })
-    extracted.step?.forEach((s: any) => {
-      if (!(s.name in recordData.research_step)) {
-        recordData.research_step[s.name] = { checked: false, annotation: '' }
-      }
-    })
-    extracted.check?.forEach((c: any) => {
-      if (!(c.name in recordData.research_check)) {
-        recordData.research_check[c.name] = { checked: false, annotation: '' }
-      }
-    })
   } catch (e: any) {
     renderError.value = e.message
   }
@@ -86,29 +69,15 @@ async function processContent() {
 
 watch(content, processContent, { immediate: true })
 
-const collectedJson = computed(() => JSON.stringify(recordData, null, 2))
+const collectedJson = computed(() => JSON.stringify(recordData.value, null, 2))
 
 const fieldCount = computed(() => {
   const f = fields.value
-  return (f.var?.length || 0) + (f.var_table?.length || 0) + (f.step?.length || 0) + (f.check?.length || 0)
+  return (f.var?.length || 0) + (f.var_table?.length || 0) + (f.quiz?.length || 0) + (f.step?.length || 0) + (f.check?.length || 0)
 })
 
 function resetForm() {
-  Object.keys(recordData.research_variable).forEach(k => {
-    recordData.research_variable[k] = ''
-  })
-  Object.keys(recordData.research_step).forEach(k => {
-    recordData.research_step[k] = { checked: false, annotation: '' }
-  })
-  Object.keys(recordData.research_check).forEach(k => {
-    recordData.research_check[k] = { checked: false, annotation: '' }
-  })
-}
-
-function getInputType(type: string): string {
-  if (['float', 'int', 'integer', 'number'].includes(type)) return 'number'
-  if (type === 'bool') return 'checkbox'
-  return 'text'
+  recordData.value = createEmptyProtocolRecordData()
 }
 </script>
 
@@ -179,74 +148,7 @@ function getInputType(type: string): string {
           </div>
 
           <div class="form-content">
-            <!-- Variables -->
-            <div v-for="v in fields.var" :key="'var-' + v.name" class="form-field">
-              <label class="field-label">
-                <span class="aimd-field aimd-field--var">
-                  <span class="aimd-field__scope">VAR</span>
-                  <span class="aimd-field__name">{{ v.name }}</span>
-                  <span v-if="v.definition?.type" class="aimd-field__type">: {{ v.definition.type }}</span>
-                </span>
-              </label>
-              <input
-                v-if="getInputType(v.definition?.type || 'str') === 'checkbox'"
-                type="checkbox"
-                v-model="recordData.research_variable[v.name]"
-                class="field-checkbox"
-              />
-              <input
-                v-else
-                :type="getInputType(v.definition?.type || 'str')"
-                v-model="recordData.research_variable[v.name]"
-                :placeholder="`输入 ${v.name}...`"
-                :step="v.definition?.type === 'float' ? '0.01' : undefined"
-                class="field-input"
-              />
-            </div>
-
-            <!-- Variable Tables -->
-            <div v-for="vt in fields.var_table" :key="'vt-' + vt.name" class="form-field">
-              <div class="aimd-field--var-table">
-                <div class="aimd-field__header">
-                  <span class="aimd-field__scope">TABLE</span>
-                  <span class="aimd-field__name">{{ vt.name }}</span>
-                </div>
-                <table v-if="vt.columns?.length" class="aimd-field__table-preview">
-                  <thead>
-                    <tr><th v-for="col in vt.columns" :key="col">{{ col }}</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr><td v-for="col in vt.columns" :key="col"><input class="table-cell-input" :placeholder="col" /></td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <!-- Steps -->
-            <div v-for="s in fields.step" :key="'step-' + s.name" class="form-field step-field">
-              <div class="step-header">
-                <span class="research-step__sequence">Step {{ s.step || '?' }} &gt;</span>
-                <span class="step-name">{{ s.name }}</span>
-              </div>
-              <div class="step-controls">
-                <label class="step-check-label">
-                  <input type="checkbox" v-model="recordData.research_step[s.name].checked" class="aimd-checkbox" />
-                  完成
-                </label>
-                <input v-model="recordData.research_step[s.name].annotation" placeholder="备注..." class="field-input annotation-input" />
-              </div>
-            </div>
-
-            <!-- Checks -->
-            <div v-for="c in fields.check" :key="'check-' + c.name" class="form-field">
-              <label class="aimd-field aimd-field--check" style="width: 100%; cursor: pointer">
-                <input type="checkbox" v-model="recordData.research_check[c.name].checked" class="aimd-checkbox" />
-                <span class="aimd-field__label">{{ c.label || c.name }}</span>
-              </label>
-              <input v-model="recordData.research_check[c.name].annotation" placeholder="检查备注..." class="field-input annotation-input" style="margin-top: 4px" />
-            </div>
-
-            <div v-if="fieldCount === 0" class="empty-state">暂无可填写的字段</div>
+            <AimdProtocolRecorder v-model="recordData" :content="content" />
           </div>
         </div>
 
@@ -408,93 +310,6 @@ function getInputType(type: string): string {
   padding: 16px;
 }
 
-.form-field {
-  margin-bottom: 12px;
-}
-
-.field-label {
-  display: block;
-  margin-bottom: 4px;
-}
-
-.field-input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--aimd-border-color, #90caf9);
-  border-radius: 0 0 6px 6px;
-  outline: none;
-  font-size: 14px;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
-}
-
-.field-input:focus {
-  border-color: var(--aimd-border-color-focus, #4181fd);
-  box-shadow: 0 0 0 2px rgba(65, 129, 253, 0.1);
-}
-
-.field-checkbox {
-  width: 18px;
-  height: 18px;
-  accent-color: #4181fd;
-}
-
-.annotation-input {
-  border-radius: 6px;
-  border-color: #e0e0e0;
-  font-size: 13px;
-  padding: 6px 10px;
-}
-
-.step-field {
-  background: #fff8f0;
-  border: 1px solid #ffcc80;
-  border-radius: 6px;
-  padding: 12px;
-}
-
-.step-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.step-name {
-  font-weight: 500;
-  color: #e65100;
-}
-
-.step-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.step-check-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: #666;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.table-cell-input {
-  width: 100%;
-  padding: 4px 8px;
-  border: 1px solid #e0e0e0;
-  border-radius: 3px;
-  font-size: 13px;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.table-cell-input:focus {
-  border-color: #4181fd;
-}
-
 .code-output {
   padding: 16px;
   font-family: 'SF Mono', 'Fira Code', monospace;
@@ -510,12 +325,5 @@ function getInputType(type: string): string {
   padding: 16px;
   color: #d03050;
   font-size: 13px;
-}
-
-.empty-state {
-  padding: 40px;
-  text-align: center;
-  color: #aaa;
-  font-size: 14px;
 }
 </style>

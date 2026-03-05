@@ -6,3 +6,4 @@
  */
 
 export { default as AimdQuizRecorder } from "./AimdQuizRecorder.vue"
+export { default as AimdProtocolRecorder } from "./AimdProtocolRecorder.vue"
