@@ -194,6 +194,7 @@ function registerAimdLanguage(monaco: any) {
         [/\|/, 'delimiter.aimd'],
         [/:/, 'delimiter'],
         [/\b(str|int|float|bool|list|dict|any)\b/, 'type.aimd'],
+        [/\b[A-Z][A-Za-z0-9_]*(?:\[[A-Za-z0-9_,\s]+\])?\b/, 'type.aimd'],
         [/[[\]()]/, 'delimiter.bracket'],
         [/=/, 'delimiter'],
         [/"[^"]*"/, 'string'],
@@ -202,7 +203,7 @@ function registerAimdLanguage(monaco: any) {
         [/\b(true|false|True|False|null|None)\b/, 'constant'],
         [/\bsubvars\b/, 'keyword'],
         [/,/, 'delimiter'],
-        [/[a-z_]\w*/i, 'variable.aimd'],
+        [/[A-Za-z_]\w*/, 'variable.aimd'],
         [/\s+/, ''],
       ],
       codeblock: [
