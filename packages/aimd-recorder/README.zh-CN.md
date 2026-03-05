@@ -2,6 +2,8 @@
 
 AIMD 记录 UI 组件与样式集合，包含协议内联录入组件与可复用题目作答控件。
 
+内置变量控件支持 `CurrentTime`、`UserName`、`AiralogyMarkdown`。
+
 ## 安装
 
 ```bash
@@ -20,12 +22,21 @@ import {
 } from "@airalogy/aimd-recorder"
 import "@airalogy/aimd-recorder/styles"
 
-const content = ref("# Protocol\\n\\n样本名：{{var|sample_name: str}}")
+const content = ref(`# Protocol
+
+样本名：{{var|sample_name: str}}
+记录者：{{var|operator: UserName}}
+记录时间：{{var|current_time: CurrentTime}}
+实验摘要：{{var|summary: AiralogyMarkdown}}`)
 const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 </script>
 
 <template>
-  <AimdProtocolRecorder v-model="record" :content="content" />
+  <AimdProtocolRecorder
+    v-model="record"
+    :content="content"
+    current-user-name="张三"
+  />
 </template>
 ```
 

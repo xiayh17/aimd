@@ -9,6 +9,6 @@
 // Re-export styles
 import './styles/aimd.css'
 
-export { AimdProtocolRecorder, AimdQuizRecorder } from './components'
+export { AimdProtocolRecorder, AimdRecorder, AimdQuizRecorder } from './components'
 export type { AimdProtocolRecordData, AimdStepOrCheckRecordItem } from './types'
 export { createEmptyProtocolRecordData } from './types'

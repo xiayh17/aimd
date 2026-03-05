@@ -4,6 +4,12 @@
 
 请输入样本名称：{{var|sample_name: str}}
 
+记录者：{{var|operator: UserName}}
+
+记录时间：{{var|current_time: CurrentTime}}
+
+实验摘要：{{var|summary: AiralogyMarkdown}}
+
 温度设定：{{var|temperature: float = 25.0}}
 
 浓度参数：{{var|concentration: float = 1.0, title = "浓度 (M)", unit = "mol/L"}}

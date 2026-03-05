@@ -19,9 +19,13 @@ const props = withDefaults(defineProps<{
   content: string
   modelValue?: Partial<AimdProtocolRecordData>
   readonly?: boolean
+  currentUserName?: string
+  now?: Date | string | number
 }>(), {
   modelValue: undefined,
   readonly: false,
+  currentUserName: undefined,
+  now: undefined,
 })
 
 const emit = defineEmits<{
@@ -36,6 +40,7 @@ const localRecord = reactive<AimdProtocolRecordData>(createEmptyProtocolRecordDa
 let buildRequestId = 0
 let syncingFromExternal = false
 let renderScheduled = false
+let recordInitializedDuringRender = false
 
 const EMPTY_FIELDS: ExtractedAimdFields = {
   var: [],
@@ -130,24 +135,6 @@ function markRecordChanged(options?: { rebuild?: boolean }) {
   if (options?.rebuild) {
     scheduleInlineRebuild()
   }
-}
-
-function normalizeVarFields(raw: unknown): Array<{ name: string, definition?: { type?: string, default?: unknown } }> {
-  if (!Array.isArray(raw)) {
-    return []
-  }
-
-  const normalized: Array<{ name: string, definition?: { type?: string, default?: unknown } }> = []
-  for (const item of raw) {
-    if (typeof item === "string" && item.trim()) {
-      normalized.push({ name: item.trim() })
-      continue
-    }
-    if (item && typeof item === "object" && typeof (item as any).name === "string") {
-      normalized.push(item as { name: string, definition?: { type?: string, default?: unknown } })
-    }
-  }
-  return normalized
 }
 
 function normalizeStepFields(raw: unknown): Array<{ name: string }> {
@@ -266,14 +253,381 @@ function getQuizDefaultValue(quiz: AimdQuizField): unknown {
   return ""
 }
 
-function getVarInputType(type: string): string {
-  if (type === "float" || type === "int" || type === "integer" || type === "number") {
+type VarInputKind = "text" | "number" | "checkbox" | "textarea" | "date" | "datetime" | "time"
+
+function normalizeVarTypeName(type: string | undefined): string {
+  return (type || "str").trim().toLowerCase().replace(/[\s_-]/g, "")
+}
+
+function getVarInputKind(type: string | undefined): VarInputKind {
+  const normalized = normalizeVarTypeName(type)
+
+  if (normalized === "float" || normalized === "int" || normalized === "integer" || normalized === "number") {
     return "number"
   }
-  if (type === "bool") {
+
+  if (normalized === "bool" || normalized === "boolean" || normalized === "checkbox") {
     return "checkbox"
   }
+
+  if (normalized === "date") {
+    return "date"
+  }
+
+  if (normalized === "datetime" || normalized === "currenttime") {
+    return "datetime"
+  }
+
+  if (normalized === "time" || normalized === "duration") {
+    return "time"
+  }
+
+  if (normalized === "md" || normalized === "markdown" || normalized === "airalogymarkdown") {
+    return "textarea"
+  }
+
   return "text"
+}
+
+function unwrapStructuredValue(value: unknown): unknown {
+  if (value && typeof value === "object" && !Array.isArray(value) && "value" in value) {
+    return (value as { value: unknown }).value
+  }
+  return value
+}
+
+function toBooleanValue(value: unknown): boolean {
+  const normalized = unwrapStructuredValue(value)
+
+  if (typeof normalized === "boolean") {
+    return normalized
+  }
+  if (typeof normalized === "number") {
+    return normalized !== 0
+  }
+  if (typeof normalized === "string") {
+    const text = normalized.trim().toLowerCase()
+    if (text === "" || text === "false" || text === "0" || text === "no" || text === "off") {
+      return false
+    }
+    if (text === "true" || text === "1" || text === "yes" || text === "on") {
+      return true
+    }
+  }
+  return Boolean(normalized)
+}
+
+function toDateValue(value: unknown): Date | null {
+  const normalized = unwrapStructuredValue(value)
+
+  if (normalized instanceof Date) {
+    return Number.isNaN(normalized.getTime()) ? null : normalized
+  }
+
+  if (typeof normalized === "number") {
+    const date = new Date(normalized)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  if (typeof normalized === "string" && normalized.trim()) {
+    const text = normalized.trim().replace(/\s+/, "T")
+    const date = new Date(text)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  return null
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0")
+}
+
+function formatDateForInput(value: unknown, kind: "date" | "datetime" | "time"): string {
+  const normalized = unwrapStructuredValue(value)
+
+  if (typeof normalized === "string" && normalized.trim()) {
+    const text = normalized.trim()
+
+    if (kind === "date" && /^\d{4}-\d{2}-\d{2}/.test(text)) {
+      return text.slice(0, 10)
+    }
+
+    if (kind === "datetime") {
+      const normalizedText = text.replace(" ", "T")
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(normalizedText)) {
+        return normalizedText.slice(0, 16)
+      }
+    }
+
+    if (kind === "time" && /^\d{2}:\d{2}/.test(text)) {
+      return text.slice(0, 8)
+    }
+  }
+
+  const date = toDateValue(normalized)
+  if (!date) {
+    return ""
+  }
+
+  const year = date.getFullYear()
+  const month = pad2(date.getMonth() + 1)
+  const day = pad2(date.getDate())
+  const hour = pad2(date.getHours())
+  const minute = pad2(date.getMinutes())
+  const second = pad2(date.getSeconds())
+
+  if (kind === "date") {
+    return `${year}-${month}-${day}`
+  }
+  if (kind === "time") {
+    return `${hour}:${minute}:${second}`
+  }
+  return `${year}-${month}-${day}T${hour}:${minute}`
+}
+
+function getVarInputDisplayValue(value: unknown, kind: VarInputKind): string | number {
+  const normalized = unwrapStructuredValue(value)
+
+  if (kind === "date" || kind === "datetime" || kind === "time") {
+    return formatDateForInput(normalized, kind)
+  }
+
+  if (kind === "number") {
+    return typeof normalized === "number" ? normalized : (typeof normalized === "string" ? normalized : "")
+  }
+
+  if (typeof normalized === "string") {
+    return normalized
+  }
+
+  if (normalized === null || typeof normalized === "undefined") {
+    return ""
+  }
+
+  return String(normalized)
+}
+
+function parseVarInputValue(rawValue: string, type: string | undefined, kind: VarInputKind): unknown {
+  if (kind === "number") {
+    const text = rawValue.trim()
+    if (!text) {
+      return ""
+    }
+    const normalizedType = normalizeVarTypeName(type)
+    const parsed = normalizedType === "int" || normalizedType === "integer"
+      ? Number.parseInt(text, 10)
+      : Number.parseFloat(text)
+    return Number.isNaN(parsed) ? rawValue : parsed
+  }
+
+  return rawValue
+}
+
+function resolveNowDate(): Date {
+  if (props.now instanceof Date) {
+    return Number.isNaN(props.now.getTime()) ? new Date() : props.now
+  }
+  if (typeof props.now === "string" || typeof props.now === "number") {
+    const date = new Date(props.now)
+    if (!Number.isNaN(date.getTime())) {
+      return date
+    }
+  }
+  return new Date()
+}
+
+function getVarInitialValue(node: AimdVarNode, type: string | undefined): unknown {
+  if (node.definition && Object.prototype.hasOwnProperty.call(node.definition, "default")) {
+    return node.definition.default
+  }
+
+  const normalizedType = normalizeVarTypeName(type)
+  const inputKind = getVarInputKind(type)
+
+  if (inputKind === "checkbox") {
+    return false
+  }
+
+  if (normalizedType === "currenttime") {
+    return formatDateForInput(resolveNowDate(), "datetime")
+  }
+
+  if (normalizedType === "username" && typeof props.currentUserName === "string") {
+    return props.currentUserName
+  }
+
+  return ""
+}
+
+function getVarPlaceholder(node: AimdVarNode): string | undefined {
+  const title = node.definition?.kwargs?.title
+  if (typeof title === "string" && title.trim()) {
+    return title.trim()
+  }
+  return undefined
+}
+
+function getVarControlMinWidth(inputKind: VarInputKind): number {
+  switch (inputKind) {
+    case "textarea":
+      return 160
+    default:
+      return 0
+  }
+}
+
+function getVarControlExtraWidth(inputKind: VarInputKind): number {
+  switch (inputKind) {
+    case "datetime":
+      return 36
+    case "date":
+      return 32
+    case "time":
+      return 28
+    default:
+      return 4
+  }
+}
+
+function calculateVarStackWidth(name: string, inputKind: VarInputKind): string {
+  const labelChars = Math.max(name.length + 7, 10)
+  const approximateCharWidth = 8
+  const horizontalPadding = 16
+  const widthPx = Math.round(labelChars * approximateCharWidth + horizontalPadding)
+  const minWidthPx = getVarControlMinWidth(inputKind)
+  const finalWidthPx = Math.max(minWidthPx, widthPx)
+
+  return `${finalWidthPx}px`
+}
+
+function parsePx(value: string): number {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+let varTextMeasureCanvas: HTMLCanvasElement | null = null
+
+function getMeasureContext(): CanvasRenderingContext2D | null {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  if (!varTextMeasureCanvas) {
+    varTextMeasureCanvas = document.createElement("canvas")
+  }
+
+  return varTextMeasureCanvas.getContext("2d")
+}
+
+function measureStyledTextWidth(text: string, computed: CSSStyleDeclaration): number {
+  const ctx = getMeasureContext()
+  if (!ctx) {
+    return 0
+  }
+
+  const fontSize = computed.fontSize || "16px"
+  const fontFamily = computed.fontFamily || "sans-serif"
+  const fontWeight = computed.fontWeight || "400"
+  const fontStyle = computed.fontStyle || "normal"
+  ctx.font = `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`
+
+  return ctx.measureText(text).width
+}
+
+function measureLabelTokenWidth(token: HTMLElement): number {
+  if (typeof window === "undefined") {
+    return token.scrollWidth
+  }
+
+  const computed = window.getComputedStyle(token)
+  const text = (token.textContent || "").trim()
+  const textWidth = measureStyledTextWidth(text, computed)
+  const horizontal =
+    parsePx(computed.paddingLeft)
+    + parsePx(computed.paddingRight)
+    + parsePx(computed.borderLeftWidth)
+    + parsePx(computed.borderRightWidth)
+    + parsePx(computed.marginLeft)
+    + parsePx(computed.marginRight)
+
+  return textWidth + horizontal
+}
+
+function measureVarLabelWidth(wrapper: HTMLElement): number {
+  const scope = wrapper.querySelector(".aimd-field__scope--var") as HTMLElement | null
+  const id = wrapper.querySelector(".aimd-field__id") as HTMLElement | null
+  if (scope && id) {
+    return measureLabelTokenWidth(scope) + measureLabelTokenWidth(id) + 4
+  }
+
+  const fallbackLabel = wrapper.querySelector(".aimd-field__label") as HTMLElement | null
+  return fallbackLabel ? fallbackLabel.scrollWidth + 2 : 0
+}
+
+function measureSingleLineControlWidth(input: HTMLInputElement | HTMLTextAreaElement): number {
+  if (typeof window === "undefined") {
+    return input.scrollWidth
+  }
+
+  const ctx = getMeasureContext()
+  if (!ctx) {
+    return input.scrollWidth
+  }
+
+  const computed = window.getComputedStyle(input)
+  const fontSize = computed.fontSize || "16px"
+  const fontFamily = computed.fontFamily || "sans-serif"
+  const fontWeight = computed.fontWeight || "400"
+  const fontStyle = computed.fontStyle || "normal"
+  ctx.font = `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`
+
+  const text = input.value || input.placeholder || ""
+  const textWidth = ctx.measureText(text).width
+  const padding = parsePx(computed.paddingLeft) + parsePx(computed.paddingRight)
+  return textWidth + padding + 2
+}
+
+function syncAutoWrapTextareaHeight(textarea: HTMLTextAreaElement) {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  const isCompactText = textarea.classList.contains("aimd-rec-inline__textarea--stacked-text")
+  textarea.style.height = "auto"
+  const computed = window.getComputedStyle(textarea)
+  const minHeight = isCompactText
+    ? (parsePx(computed.getPropertyValue("--rec-var-control-height")) || parsePx(computed.height))
+    : (parsePx(computed.minHeight) || parsePx(computed.height))
+
+  if (isCompactText && textarea.value.length === 0) {
+    textarea.style.height = `${Math.ceil(minHeight)}px`
+    return
+  }
+
+  const borderHeight = parsePx(computed.borderTopWidth) + parsePx(computed.borderBottomWidth)
+  const nextHeight = Math.max(minHeight, textarea.scrollHeight + borderHeight)
+  textarea.style.height = `${Math.ceil(nextHeight)}px`
+}
+
+function applyVarStackWidth(target: HTMLElement, inputKind: VarInputKind) {
+  const wrapper = target.closest(".aimd-rec-inline--var-stacked") as HTMLElement | null
+  if (!wrapper || typeof window === "undefined") {
+    return
+  }
+
+  const labelWidth = measureVarLabelWidth(wrapper)
+
+  const minWidthPx = getVarControlMinWidth(inputKind)
+  let controlWidth = 0
+  const input = wrapper.querySelector(".aimd-rec-inline__input--stacked, .aimd-rec-inline__textarea--stacked-text") as
+    HTMLInputElement | HTMLTextAreaElement | null
+  if (input) {
+    controlWidth = measureSingleLineControlWidth(input) + getVarControlExtraWidth(inputKind)
+  }
+
+  const measuredWidth = Math.max(minWidthPx, labelWidth, controlWidth)
+  wrapper.style.width = `${Math.ceil(measuredWidth)}px`
+  wrapper.style.maxWidth = "100%"
 }
 
 function getVarTableColumns(node: AimdVarTableNode): string[] {
@@ -344,13 +698,6 @@ function removeVarTableRow(tableName: string, rowIndex: number, columns: string[
 function ensureDefaultsFromFields(fields: ExtractedAimdFields): boolean {
   let changed = false
 
-  for (const v of normalizeVarFields(fields.var)) {
-    if (!(v.name in localRecord.var)) {
-      localRecord.var[v.name] = v.definition?.default ?? ""
-      changed = true
-    }
-  }
-
   for (const vt of normalizeVarTableFields(fields.var_table)) {
     const columns = vt.subvars.map(subvar => subvar.name)
     const rows = localRecord.var[vt.name]
@@ -386,43 +733,123 @@ function ensureDefaultsFromFields(fields: ExtractedAimdFields): boolean {
 }
 
 function renderInlineVar(node: AimdVarNode): VNode {
-  const name = node.name
+  const id = node.name
   const type = node.definition?.type || "str"
-  if (!(name in localRecord.var)) {
-    localRecord.var[name] = node.definition?.default ?? ""
+  const normalizedType = normalizeVarTypeName(type)
+  const inputKind = getVarInputKind(type)
+  if (!(id in localRecord.var)) {
+    localRecord.var[id] = getVarInitialValue(node, type)
+    recordInitializedDuringRender = true
   }
 
-  if (getVarInputType(type) === "checkbox") {
-    return h("label", { class: "aimd-rec-inline aimd-rec-inline--var aimd-field aimd-field--var aimd-rec-inline--checkbox" }, [
-      h("span", { class: "aimd-field__scope" }, "var"),
-      h("span", { class: "aimd-field__name" }, name),
-      h("input", {
-        type: "checkbox",
-        disabled: props.readonly,
-        checked: Boolean(localRecord.var[name]),
-        onChange: (event: Event) => {
-          localRecord.var[name] = (event.target as HTMLInputElement).checked
-          markRecordChanged()
-        },
-      }),
+  const htmlInputType = inputKind === "datetime" ? "datetime-local" : inputKind
+  const placeholder = getVarPlaceholder(node)
+  const displayValue = getVarInputDisplayValue(localRecord.var[id], inputKind)
+  const wrapperStyle = {
+    width: calculateVarStackWidth(id, inputKind),
+    maxWidth: "100%",
+  }
+
+  const renderStackedVar = (control: VNode, variantClass?: string): VNode => {
+    return h("span", {
+      class: ["aimd-rec-inline aimd-rec-inline--var-stacked aimd-field-wrapper aimd-field-wrapper--inline", variantClass],
+      style: wrapperStyle,
+    }, [
+      h("span", { class: "aimd-field aimd-field--no-style aimd-field__label" }, [
+        h("span", { class: "aimd-field__scope aimd-field__scope--var" }, "var"),
+        h("span", { class: "aimd-field__id" }, id),
+      ]),
+      control,
     ])
   }
 
-  return h("span", { class: "aimd-rec-inline aimd-rec-inline--var aimd-field aimd-field--var" }, [
-    h("span", { class: "aimd-field__scope" }, "var"),
-    h("span", { class: "aimd-field__name" }, name),
+  if (inputKind === "checkbox") {
+    return renderStackedVar(
+      h("span", { class: "aimd-rec-inline__checkbox-row" }, [
+        h("input", {
+          type: "checkbox",
+          disabled: props.readonly,
+          checked: toBooleanValue(localRecord.var[id]),
+          onVnodeMounted: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
+          onVnodeUpdated: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
+          onChange: (event: Event) => {
+            const target = event.target as HTMLInputElement
+            localRecord.var[id] = target.checked
+            markRecordChanged()
+          },
+        }),
+      ]),
+      "aimd-rec-inline--var-stacked--checkbox",
+    )
+  }
+
+  if (inputKind === "textarea") {
+    return renderStackedVar(
+      h("textarea", {
+        class: "aimd-rec-inline__textarea aimd-rec-inline__textarea--stacked",
+        disabled: props.readonly,
+        placeholder,
+        value: displayValue,
+        onVnodeMounted: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
+        onVnodeUpdated: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
+        onInput: (event: Event) => {
+          const target = event.target as HTMLTextAreaElement
+          localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
+          markRecordChanged()
+        },
+      }),
+      "aimd-rec-inline--var-stacked--textarea",
+    )
+  }
+
+  if (inputKind === "text") {
+    return renderStackedVar(
+      h("textarea", {
+        class: "aimd-rec-inline__textarea aimd-rec-inline__textarea--stacked aimd-rec-inline__textarea--stacked-text",
+        rows: 1,
+        disabled: props.readonly,
+        placeholder,
+        value: displayValue,
+        onVnodeMounted: (vnode: any) => {
+          const el = vnode.el as HTMLTextAreaElement
+          applyVarStackWidth(el, inputKind)
+          syncAutoWrapTextareaHeight(el)
+        },
+        onVnodeUpdated: (vnode: any) => {
+          const el = vnode.el as HTMLTextAreaElement
+          applyVarStackWidth(el, inputKind)
+          syncAutoWrapTextareaHeight(el)
+        },
+        onInput: (event: Event) => {
+          const target = event.target as HTMLTextAreaElement
+          localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
+          applyVarStackWidth(target, inputKind)
+          syncAutoWrapTextareaHeight(target)
+          markRecordChanged()
+        },
+      }),
+    )
+  }
+
+  return renderStackedVar(
     h("input", {
-      class: "aimd-rec-inline__input",
-      type: getVarInputType(type),
+      class: "aimd-rec-inline__input aimd-rec-inline__input--stacked",
+      type: htmlInputType,
       disabled: props.readonly,
-      step: type === "float" ? "0.01" : undefined,
-      value: localRecord.var[name] ?? "",
+      placeholder,
+      step: inputKind === "number"
+        ? (normalizedType === "int" || normalizedType === "integer" ? "1" : "any")
+        : (inputKind === "time" ? "1" : undefined),
+      value: displayValue,
+      onVnodeMounted: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
+      onVnodeUpdated: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
       onInput: (event: Event) => {
-        localRecord.var[name] = (event.target as HTMLInputElement).value
+        const target = event.target as HTMLInputElement
+        localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
         markRecordChanged()
       },
     }),
-  ])
+  )
 }
 
 function renderInlineVarTable(node: AimdVarTableNode): VNode {
@@ -581,6 +1008,7 @@ function renderInlineQuiz(node: AimdQuizNode): VNode {
 }
 
 async function rebuildInlineNodes(expectedRequestId?: number) {
+  recordInitializedDuringRender = false
   const rendered = await renderToVue(props.content || "", {
     mode: "edit",
     aimdRenderers: {
@@ -597,6 +1025,10 @@ async function rebuildInlineNodes(expectedRequestId?: number) {
   }
 
   inlineNodes.value = rendered.nodes
+
+  if (recordInitializedDuringRender) {
+    emitRecordUpdate()
+  }
 }
 
 async function parseAndBuild() {
@@ -667,6 +1099,9 @@ watch(
   --rec-muted: #667085;
   --rec-border: #e3e8ef;
   --rec-focus: #2f6fed;
+  --rec-var-control-height: 30px;
+  --rec-var-single-line-height: 1.2;
+  --rec-var-text-wrap-line-height: 1.35;
 }
 
 .aimd-protocol-recorder__error {
@@ -826,6 +1261,119 @@ watch(
   vertical-align: middle;
 }
 
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-multiline) {
+  align-items: flex-start;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  margin: 5px 3px;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--aimd-border-color, #90caf9);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: none;
+  background: #f7fbff;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked--textarea) {
+  min-width: 0;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked--checkbox) {
+  width: fit-content;
+  min-width: 0;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked:focus-within) {
+  border-color: var(--aimd-border-color-focus, #4181fd);
+  box-shadow: 0 0 0 2px rgba(65, 129, 253, 0.14);
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field) {
+  margin: 0;
+  box-shadow: none;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field--no-style.aimd-field__label) {
+  min-height: 30px;
+  border-radius: 6px 6px 0 0;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field__scope) {
+  align-self: center;
+  height: 22px;
+  margin-left: 3px;
+  padding: 0 7px;
+  border-radius: 6px;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field__id) {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  padding: 0 10px 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1565c0;
+  white-space: nowrap;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input--stacked) {
+  width: 100%;
+  min-width: 0;
+  height: var(--rec-var-control-height);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: var(--rec-var-single-line-height);
+  border: 0 none;
+  border-top: 1px solid var(--aimd-border-color, #90caf9);
+  border-radius: 0 0 6px 6px;
+  margin: 0;
+  box-shadow: none;
+  padding: 0 10px;
+  background: #fff;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input--stacked:focus) {
+  border-color: var(--aimd-border-color, #90caf9);
+  box-shadow: none;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea--stacked:not(.aimd-rec-inline__textarea--stacked-text)) {
+  width: 100%;
+  min-width: 0;
+  min-height: 82px;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  border: 0 none;
+  border-top: 1px solid var(--aimd-border-color, #90caf9);
+  border-radius: 0 0 6px 6px;
+  margin: 0;
+  box-shadow: none;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea--stacked:focus) {
+  border-color: var(--aimd-border-color, #90caf9);
+  box-shadow: none;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__checkbox-row) {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 10px;
+  border-top: 1px solid var(--aimd-border-color, #90caf9);
+  background: #fff;
+}
+
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline--step),
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline--check) {
   gap: 8px;
@@ -892,6 +1440,68 @@ watch(
 
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline__input--annotation) {
   width: clamp(130px, 24vw, 220px);
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input.aimd-rec-inline__input--stacked),
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked) {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea) {
+  width: clamp(180px, 34vw, 420px);
+  min-height: 78px;
+  padding: 8px 10px;
+  border: 1px solid #c8d3e1;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+  color: var(--rec-text);
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea:focus) {
+  border-color: var(--rec-focus);
+  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.12);
+}
+
+/* Keep stacked var input borderless inside; only outer wrapper should show border/focus */
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input.aimd-rec-inline__input--stacked),
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked) {
+  width: 100%;
+  min-width: 0;
+  border: 0 none;
+  border-top: 1px solid var(--aimd-border-color, #90caf9);
+  border-radius: 0 0 6px 6px;
+  box-shadow: none;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked:not(.aimd-rec-inline__textarea--stacked-text)) {
+  min-height: 82px;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked-text) {
+  min-height: 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  line-height: var(--rec-var-text-wrap-line-height);
+  resize: none;
+  overflow-y: hidden;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input.aimd-rec-inline__input--stacked:focus),
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked:focus) {
+  border-color: transparent;
+  border-top-color: var(--aimd-border-color, #90caf9);
+  box-shadow: none;
 }
 
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline-table) {

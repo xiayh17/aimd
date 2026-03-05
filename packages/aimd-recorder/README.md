@@ -2,6 +2,8 @@
 
 Reusable recording UI for AIMD, including inline protocol recorder, quiz answer components, and styles.
 
+Built-in variable input types include `CurrentTime`, `UserName`, and `AiralogyMarkdown`.
+
 ## Install
 
 ```bash
@@ -20,12 +22,21 @@ import {
 } from "@airalogy/aimd-recorder"
 import "@airalogy/aimd-recorder/styles"
 
-const content = ref("# Protocol\\n\\nSample: {{var|sample_name: str}}")
+const content = ref(`# Protocol
+
+Sample: {{var|sample_name: str}}
+Operator: {{var|operator: UserName}}
+Record Time: {{var|current_time: CurrentTime}}
+Notes: {{var|notes: AiralogyMarkdown}}`)
 const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 </script>
 
 <template>
-  <AimdProtocolRecorder v-model="record" :content="content" />
+  <AimdProtocolRecorder
+    v-model="record"
+    :content="content"
+    current-user-name="Alice"
+  />
 </template>
 ```
 
