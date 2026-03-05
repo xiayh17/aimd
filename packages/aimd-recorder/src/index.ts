@@ -9,5 +9,4 @@
 // Re-export styles
 import './styles/aimd.css'
 
-// Note: Actual component exports will be added as components are migrated
-// For now, this serves as a placeholder for the editor package structure
+export { AimdQuizRecorder } from './components'

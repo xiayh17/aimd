@@ -15,6 +15,7 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-renderer @airalogy/aimd-core
 ## 功能特性
 
 -  **样式** - AIMD 元素和编辑器 UI 的预构建 CSS
+-  **Quiz 记录控件** - 可复用的题目作答组件（`choice` / `blank` / `open`）
 
 ## 使用
 
@@ -29,10 +30,35 @@ import '@airalogy/aimd-recorder/styles'
 ### 主入口（`@airalogy/aimd-recorder`）
 
 - 默认会副作用导入 `./styles/aimd.css`（也可通过 `@airalogy/aimd-recorder/styles` 单独导入）
+- 同时导出 `AimdQuizRecorder`
 
 ### 组件入口（`@airalogy/aimd-recorder/components`）
 
-目前为占位入口，暂无公开导出。
+- `AimdQuizRecorder`
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import { AimdQuizRecorder } from "@airalogy/aimd-recorder/components"
+import "@airalogy/aimd-recorder/styles"
+
+const answer = ref("")
+const quiz = {
+  id: "quiz_single_1",
+  type: "choice",
+  mode: "single",
+  stem: "请选择一个选项",
+  options: [
+    { key: "A", text: "选项 A" },
+    { key: "B", text: "选项 B" },
+  ],
+}
+</script>
+
+<template>
+  <AimdQuizRecorder v-model="answer" :quiz="quiz" />
+</template>
+```
 
 ### 组合式入口（`@airalogy/aimd-recorder/composables`）
 

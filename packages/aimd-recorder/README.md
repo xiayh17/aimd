@@ -15,6 +15,7 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-renderer @airalogy/aimd-core
 ## Features
 
 -  **Styles** - Pre-built CSS for AIMD elements and editor UI
+-  **Quiz Recorder** - Reusable quiz answer component (`choice` / `blank` / `open`)
 
 ## Usage
 
@@ -29,10 +30,35 @@ import '@airalogy/aimd-recorder/styles'
 ### Main Entry (`@airalogy/aimd-recorder`)
 
 - Side-effect import of `./styles/aimd.css` (also available via `@airalogy/aimd-recorder/styles`)
+- Re-export of `AimdQuizRecorder`
 
 ### Components Entry (`@airalogy/aimd-recorder/components`)
 
-Currently a placeholder entry with no public exports.
+- `AimdQuizRecorder`
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import { AimdQuizRecorder } from "@airalogy/aimd-recorder/components"
+import "@airalogy/aimd-recorder/styles"
+
+const answer = ref("")
+const quiz = {
+  id: "quiz_single_1",
+  type: "choice",
+  mode: "single",
+  stem: "Pick one option",
+  options: [
+    { key: "A", text: "Option A" },
+    { key: "B", text: "Option B" },
+  ],
+}
+</script>
+
+<template>
+  <AimdQuizRecorder v-model="answer" :quiz="quiz" />
+</template>
+```
 
 ### Composables Entry (`@airalogy/aimd-recorder/composables`)
 
