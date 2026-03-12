@@ -6,6 +6,10 @@ import { useDemoLocale, useDemoMessages } from './composables/demoI18n'
 const route = useRoute()
 const { locale } = useDemoLocale()
 const messages = useDemoMessages()
+const docsHref = computed(() => locale.value === 'zh-CN'
+  ? 'https://airalogy.github.io/aimd/zh/'
+  : 'https://airalogy.github.io/aimd/en/')
+const githubHref = 'https://github.com/airalogy/aimd'
 
 const navItems = computed(() => [
   { path: '/full', label: messages.value.nav.full },
@@ -32,6 +36,14 @@ const currentPath = computed(() => route.path)
           {{ item.label }}
         </router-link>
       </nav>
+      <div class="app-links">
+        <a :href="docsHref" class="app-link-btn" target="_blank" rel="noreferrer">
+          {{ messages.app.links.docs }}
+        </a>
+        <a :href="githubHref" class="app-link-btn app-link-btn--ghost" target="_blank" rel="noreferrer">
+          {{ messages.app.links.github }}
+        </a>
+      </div>
       <label class="locale-switcher">
         <span class="locale-switcher__label">{{ messages.app.languageLabel }}</span>
         <select v-model="locale" class="locale-switcher__select">
@@ -86,6 +98,41 @@ body {
   display: flex;
   gap: 4px;
   flex: 1;
+}
+
+.app-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: #1a73e8;
+  color: #fff;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.app-link-btn:hover {
+  background: #1765cb;
+}
+
+.app-link-btn--ghost {
+  border: 1px solid #d0d7de;
+  background: #fff;
+  color: #334155;
+}
+
+.app-link-btn--ghost:hover {
+  background: #f8fafc;
 }
 
 .nav-link {
@@ -158,6 +205,10 @@ body {
 
   .locale-switcher {
     margin-left: 0;
+  }
+
+  .app-links {
+    width: 100%;
   }
 
   .app-main {

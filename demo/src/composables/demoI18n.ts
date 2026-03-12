@@ -41,6 +41,10 @@ export interface DemoMessages {
     title: string
     languageLabel: string
     localeNames: Record<DemoLocale, string>
+    links: {
+      docs: string
+      github: string
+    }
   }
   nav: {
     full: string
@@ -109,6 +113,10 @@ const BASE_DEMO_MESSAGES: Record<DemoLocale, DemoMessages> = {
         'en-US': 'English',
         'zh-CN': '中文',
       },
+      links: {
+        docs: 'Docs',
+        github: 'GitHub',
+      },
     },
     nav: {
       full: 'Full Workflow',
@@ -174,6 +182,10 @@ const BASE_DEMO_MESSAGES: Record<DemoLocale, DemoMessages> = {
       localeNames: {
         'en-US': 'English',
         'zh-CN': '中文',
+      },
+      links: {
+        docs: '文档站',
+        github: 'GitHub',
       },
     },
     nav: {
