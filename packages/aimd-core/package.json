@@ -1,7 +1,7 @@
 {
   "name": "@airalogy/aimd-core",
   "type": "module",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "AIMD (Airalogy Markdown) core parser and syntax definitions",
   "keywords": [
     "aimd",
@@ -43,7 +43,8 @@
     "type-check": "tsc --noEmit",
     "build:types": "tsc --emitDeclarationOnly --declaration --outDir dist",
     "build": "vite build && pnpm run build:types",
-    "dev": "vite build --watch"
+    "dev": "vite build --watch",
+    "test": "pnpm run build && node --test ./tests/*.test.mjs"
   },
   "dependencies": {
     "@types/hast": "^3.0.4",

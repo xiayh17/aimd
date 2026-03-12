@@ -7,7 +7,9 @@ import assert from 'node:assert/strict'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const pluginPath = resolve(__dirname, '../src/vue/milkdown-aimd-plugin.ts')
+const editorPath = resolve(__dirname, '../src/vue/AimdEditor.vue')
 const source = readFileSync(pluginPath, 'utf8')
+const editorSource = readFileSync(editorPath, 'utf8')
 
 function getToMarkdownBlock(content) {
   const match = content.match(/toMarkdown:\s*\{[\s\S]*?\n\s*}\s*,\n\s*}\s*as NodeSchema\)\)/)
@@ -46,4 +48,17 @@ test('inline hardbreak schema override renders line break as <br> in WYSIWYG', (
 test('inline hardbreak schema override is included in aimd plugin chain', () => {
   const pluginList = getPluginListBlock(source)
   assert.match(pluginList, /inlineHardbreakSchema/)
+})
+
+test('milkdown remark plugin restores protected AIMD inline templates before matching', () => {
+  assert.match(source, /import\s+\{\s*restoreAimdInlineTemplates\s*\}\s+from\s+'@airalogy\/aimd-core'/)
+  assert.match(source, /node\.value\s*=\s*restoreAimdInlineTemplates\(node\.value\)/)
+})
+
+test('AimdEditor protects markdown before feeding content into Milkdown', () => {
+  assert.match(editorSource, /import\s+\{\s*protectAimdInlineTemplates\s*\}\s+from\s+'@airalogy\/aimd-core'/)
+  assert.match(editorSource, /function toMilkdownMarkdown\(markdown: string\): string \{\s*return protectAimdInlineTemplates\(markdown\)\.content\s*\}/)
+  assert.match(editorSource, /ctx\.set\(defaultValueCtx,\s*toMilkdownMarkdown\(defaultVal\.value\)\)/)
+  assert.match(editorSource, /replaceAll\(toMilkdownMarkdown\(content\.value\)\)/)
+  assert.match(editorSource, /replaceAll\(toMilkdownMarkdown\(val\)\)/)
 })

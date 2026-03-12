@@ -13,6 +13,12 @@
 // Parser exports
 export { default as remarkAimd } from './parser/remark-aimd'
 export { default as rehypeAimd } from './parser/rehype-aimd'
+export {
+  protectAimdInlineTemplates,
+  restoreAimdInlineTemplates,
+  type AimdInlineTemplateMap,
+  type ProtectedAimdInlineTemplates,
+} from './parser/inline-template-protection'
 export { DOM_ATTR_NAME, type DomAttrName } from './parser/constants'
 
 // Type exports

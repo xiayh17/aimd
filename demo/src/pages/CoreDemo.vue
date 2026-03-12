@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { remarkAimd } from '@airalogy/aimd-core'
+import { protectAimdInlineTemplates, remarkAimd } from '@airalogy/aimd-core'
 import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
@@ -22,8 +22,9 @@ async function parseContent() {
       .use(remarkGfm)
       .use(remarkAimd)
 
-    const file: VFile = { data: {} } as VFile
-    const tree = processor.parse(input.value)
+    const { content, templates } = protectAimdInlineTemplates(input.value)
+    const file: VFile = { data: { aimdInlineTemplates: templates } } as unknown as VFile
+    const tree = processor.parse(content)
     await processor.run(tree, file)
 
     astOutput.value = JSON.stringify(tree, null, 2)

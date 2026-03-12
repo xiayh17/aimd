@@ -12,13 +12,22 @@ Experiment summary: {{var|summary: AiralogyMarkdown}}
 
 Temperature setting: {{var|temperature: float = 25.0}}
 
-Concentration setting: {{var|concentration: float = 1.0, title = "Concentration (M)", unit = "mol/L"}}
+Concentration setting: {{var|concentration: float = 1.0, title = "Concentration (M)"}}
 
 Is active: {{var|is_active: bool = true}}
 
 ## Variable Table
 
 {{var|samples, subvars=[sample_id, concentration, volume]}}
+
+## Inline Vars In Markdown Table
+
+| Ingredient | Amount |
+| --- | --- |
+| Water | {{var|water_volume_ml: float}} mL |
+| Lemon juice | {{var|lemon_juice_ml: float}} mL |
+| Sugar | {{var|sugar_weight_g: float}} g |
+| Ice cubes | {{var|ice_cube_count: int}} |
 
 ## Experiment Steps
 

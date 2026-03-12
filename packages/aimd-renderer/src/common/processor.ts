@@ -30,7 +30,7 @@ import remarkParse from "remark-parse"
 import remarkRehype from "remark-rehype"
 import { unified } from "unified"
 
-import { remarkAimd } from "@airalogy/aimd-core/parser"
+import { protectAimdInlineTemplates, remarkAimd } from "@airalogy/aimd-core/parser"
 import {
   createAimdRendererMessages,
   getAimdRendererQuizTypeLabel,
@@ -51,6 +51,20 @@ async function ensureMathStylesLoaded(mathEnabled: boolean | undefined): Promise
     mathStylesLoadPromise = import("../styles/katex.css").catch(() => undefined)
   }
   await mathStylesLoadPromise
+}
+
+function createAimdParseInput(content: string) {
+  const { content: protectedContent, templates } = protectAimdInlineTemplates(content)
+  const file: VFile = {
+    data: {
+      aimdInlineTemplates: templates,
+    },
+  } as unknown as VFile
+
+  return {
+    content: protectedContent,
+    file,
+  }
 }
 
 /**
@@ -715,8 +729,8 @@ export async function renderToHtml(
   await ensureMathStylesLoaded(options.math)
   const processor = createHtmlProcessor(options)
 
-  const tree = processor.parse(content)
-  const file: VFile = { data: {} } as VFile
+  const { content: protectedContent, file } = createAimdParseInput(content)
+  const tree = processor.parse(protectedContent)
   const hastTree = await processor.run(tree, file) as HastRoot
 
   const html = toHtml(hastTree, { allowDangerousHtml: true })
@@ -746,8 +760,8 @@ export async function renderToVue(
   await ensureMathStylesLoaded(options.math)
   const processor = createHtmlProcessor(options)
 
-  const tree = processor.parse(content)
-  const file: VFile = { data: {} } as VFile
+  const { content: protectedContent, file } = createAimdParseInput(content)
+  const tree = processor.parse(protectedContent)
   const hastTree = await processor.run(tree, file) as HastRoot
 
   const nodes = renderToVNodes(hastTree, options)
@@ -775,8 +789,8 @@ export function parseAndExtract(content: string): ExtractedAimdFields {
     .use(remarkParse)
     .use(remarkAimd)
 
-  const file: VFile = { data: {} } as VFile
-  const tree = processor.parse(content)
+  const { content: protectedContent, file } = createAimdParseInput(content)
+  const tree = processor.parse(protectedContent)
   processor.runSync(tree, file)
 
   return (file.data.aimdFields as ExtractedAimdFields) || {
@@ -829,8 +843,8 @@ export function renderToHtmlSync(
     } as any)
     .use(rehypeRaw)
 
-  const file: VFile = { data: {} } as VFile
-  const tree = processor.parse(content)
+  const { content: protectedContent, file } = createAimdParseInput(content)
+  const tree = processor.parse(protectedContent)
   const hastTree = processor.runSync(tree, file) as HastRoot
 
   const html = toHtml(hastTree, { allowDangerousHtml: true })

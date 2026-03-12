@@ -2,6 +2,12 @@
 
 All notable changes to `@airalogy/aimd-editor` will be documented in this file.
 
+## [1.2.1] - 2026-03-12
+
+### Fixed
+
+- Fixed WYSIWYG parsing/round-tripping for AIMD inline templates inside Markdown tables, so `{{var|...}}` now works without breaking table cells when switching between source and WYSIWYG modes.
+
 ## [1.1.1] - 2026-03-05
 
 ### Fixed

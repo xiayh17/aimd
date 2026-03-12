@@ -23,6 +23,10 @@ import {
   registerStep,
   type StepContext,
 } from "./field-parsers"
+import {
+  restoreAimdInlineTemplates,
+  type AimdInlineTemplateMap,
+} from "./inline-template-protection"
 import { parseQuizContent } from "./quiz-parser"
 import { SKIP, visit } from "unist-util-visit"
 
@@ -161,8 +165,12 @@ function createAimdNode(
  */
 type InlineContentNode = PhrasingContent | AimdNode
 
-function processTextNode(node: Text, stepContext: StepContext): InlineContentNode[] {
-  const { value } = node
+function processTextNode(
+  node: Text,
+  stepContext: StepContext,
+  templates?: AimdInlineTemplateMap,
+): InlineContentNode[] {
+  const value = restoreAimdInlineTemplates(node.value, templates)
   const result: InlineContentNode[] = []
   let lastIndex = 0
 
@@ -193,6 +201,10 @@ function processTextNode(node: Text, stepContext: StepContext): InlineContentNod
       type: "text",
       value: value.slice(lastIndex),
     })
+  }
+
+  if (result.length === 0 && value !== node.value) {
+    return [{ type: "text", value }]
   }
 
   return result.length > 0 ? result : [node]
@@ -232,6 +244,7 @@ const remarkAimd: Plugin<[RemarkAimdOptions?], Root> = (options = {}) => {
   const { extractFields = true } = options
 
   return (tree, file) => {
+    const inlineTemplates = file.data?.aimdInlineTemplates as AimdInlineTemplateMap | undefined
     const fields: ExtractedAimdFields = {
       var: [],
       var_table: [],
@@ -246,6 +259,15 @@ const remarkAimd: Plugin<[RemarkAimdOptions?], Root> = (options = {}) => {
     }
 
     const stepContext = createStepContext()
+
+    visit(tree, (node: any) => {
+      if (
+        (node.type === "code" || node.type === "inlineCode" || node.type === "html")
+        && typeof node.value === "string"
+      ) {
+        node.value = restoreAimdInlineTemplates(node.value, inlineTemplates)
+      }
+    })
 
     // First pass: process fig/quiz code blocks.
     visit(tree, "code", (node: Code, index, parent) => {
@@ -312,7 +334,7 @@ const remarkAimd: Plugin<[RemarkAimdOptions?], Root> = (options = {}) => {
       if (index === undefined || !parent)
         return
 
-      const processed = processTextNode(node, stepContext)
+      const processed = processTextNode(node, stepContext, inlineTemplates)
 
       if (processed.length === 1 && processed[0] === node)
         return

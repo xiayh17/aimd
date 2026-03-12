@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch, shallowRef, computed, nextTick, defineComponent, h, toRef } from 'vue'
+import { protectAimdInlineTemplates } from '@airalogy/aimd-core'
 import { parseAndExtract } from '@airalogy/aimd-renderer'
 
 // Milkdown
@@ -79,6 +80,10 @@ const resolvedMessages = computed(() => createAimdEditorMessages(props.locale, p
 
 let isSyncing = false
 
+function toMilkdownMarkdown(markdown: string): string {
+  return protectAimdInlineTemplates(markdown).content
+}
+
 // Sync external modelValue changes
 watch(() => props.modelValue, (val) => {
   if (val !== content.value) {
@@ -87,7 +92,7 @@ watch(() => props.modelValue, (val) => {
     if (editorMode.value === 'source' && monacoEditor.value) {
       monacoEditor.value.setValue(val)
     } else if (editorMode.value === 'wysiwyg' && milkdownEditorRef.value) {
-      try { milkdownEditorRef.value.action(replaceAll(val)) } catch {}
+      try { milkdownEditorRef.value.action(replaceAll(toMilkdownMarkdown(val))) } catch {}
     }
     isSyncing = false
   }
@@ -385,7 +390,7 @@ async function switchMode(mode: 'source' | 'wysiwyg') {
     if (milkdownEditorRef.value) {
       try {
         isSyncing = true
-        milkdownEditorRef.value.action(replaceAll(content.value))
+        milkdownEditorRef.value.action(replaceAll(toMilkdownMarkdown(content.value)))
         isSyncing = false
       } catch { isSyncing = false }
     }
@@ -710,7 +715,7 @@ const MilkdownEditorInner = defineComponent({
       const editor = Editor.make()
         .config((ctx) => {
           ctx.set(rootCtx, root)
-          ctx.set(defaultValueCtx, defaultVal.value)
+          ctx.set(defaultValueCtx, toMilkdownMarkdown(defaultVal.value))
           ctx.set(editorViewOptionsCtx, {
             attributes: { class: 'milkdown-editor-content', spellcheck: 'false' },
           })
@@ -862,7 +867,7 @@ defineExpose({
     if (editorMode.value === 'source' && monacoEditor.value) {
       monacoEditor.value.setValue(val)
     } else if (milkdownEditorRef.value) {
-      try { milkdownEditorRef.value.action(replaceAll(val)) } catch {}
+      try { milkdownEditorRef.value.action(replaceAll(toMilkdownMarkdown(val))) } catch {}
     }
   },
   getMode: () => editorMode.value,

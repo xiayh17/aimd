@@ -1,7 +1,7 @@
 {
   "name": "@airalogy/aimd-renderer",
   "type": "module",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "AIMD rendering engines for HTML and Vue",
   "keywords": [
     "aimd",
@@ -38,7 +38,8 @@
     "type-check": "tsc --noEmit",
     "build:types": "tsc --emitDeclarationOnly --declaration --outDir dist",
     "build": "vite build && pnpm run build:types",
-    "dev": "vite build --watch"
+    "dev": "vite build --watch",
+    "test": "pnpm run build && node --test ./tests/*.test.mjs"
   },
   "peerDependencies": {
     "vue": "^3.5.17"

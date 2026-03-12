@@ -11,6 +11,7 @@ import type { Ctx, MilkdownPlugin } from '@milkdown/kit/ctx'
 import type { NodeSchema, MarkdownNode } from '@milkdown/kit/transformer'
 import type { Node as ProsemirrorNode } from '@milkdown/kit/prose/model'
 import type { EditorView, NodeView } from '@milkdown/kit/prose/view'
+import { restoreAimdInlineTemplates } from '@airalogy/aimd-core'
 import { hardbreakAttr, hardbreakSchema } from '@milkdown/kit/preset/commonmark'
 import { $node, $view, $remark, $inputRule } from '@milkdown/kit/utils'
 import { InputRule } from '@milkdown/kit/prose/inputrules'
@@ -48,10 +49,17 @@ function remarkAimdInline() {
   const AIMD_RE = /\{\{(\w+)\|([^}]*)\}\}/g
 
   function transformer(tree: any) {
-    visitText(tree)
+    visitNode(tree)
   }
 
-  function visitText(node: any) {
+  function visitNode(node: any) {
+    if (
+      typeof node.value === 'string'
+      && (node.type === 'text' || node.type === 'code' || node.type === 'inlineCode' || node.type === 'html')
+    ) {
+      node.value = restoreAimdInlineTemplates(node.value)
+    }
+
     if (node.type === 'text' && typeof node.value === 'string') {
       const value: string = node.value
       AIMD_RE.lastIndex = 0
@@ -93,7 +101,7 @@ function remarkAimdInline() {
     if (node.children) {
       const newChildren: any[] = []
       for (const child of node.children) {
-        visitText(child)
+        visitNode(child)
         if (child._aimdChildren) {
           newChildren.push(...child._aimdChildren)
           delete child._aimdChildren

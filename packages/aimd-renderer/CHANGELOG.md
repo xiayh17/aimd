@@ -2,6 +2,12 @@
 
 All notable changes to `@airalogy/aimd-renderer` will be documented in this file.
 
+## [1.4.1] - 2026-03-12
+
+### Changed
+
+- Fixed inline AIMD fields inside Markdown tables so `{{var|...}}` works directly without requiring the Markdown escape form `{{var\|...}}`.
+
 ## [1.4.0] - 2026-03-12
 
 ### Added

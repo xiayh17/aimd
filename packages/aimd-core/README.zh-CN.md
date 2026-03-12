@@ -24,6 +24,17 @@ processor.runSync(tree, file)
 console.log(file.data.aimdFields)
 ```
 
+如果 AIMD 行内模板出现在 Markdown 表格单元格中，需要在 `parse()` 之前先保护模板，避免 GFM 把模板里的 `|` 当成列表格分隔符：
+
+```ts
+import { protectAimdInlineTemplates, remarkAimd } from "@airalogy/aimd-core/parser"
+
+const { content: protectedContent, templates } = protectAimdInlineTemplates(content)
+const file = { data: { aimdInlineTemplates: templates } } as any
+const tree = processor.parse(protectedContent)
+processor.runSync(tree, file)
+```
+
 ## 文档
 
 - EN: <https://airalogy.github.io/aimd/en/packages/aimd-core>

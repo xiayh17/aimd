@@ -24,6 +24,17 @@ processor.runSync(tree, file)
 console.log(file.data.aimdFields)
 ```
 
+If AIMD inline templates appear inside Markdown tables, protect them before `parse()` so GFM does not split on the template pipe:
+
+```ts
+import { protectAimdInlineTemplates, remarkAimd } from "@airalogy/aimd-core/parser"
+
+const { content: protectedContent, templates } = protectAimdInlineTemplates(content)
+const file = { data: { aimdInlineTemplates: templates } } as any
+const tree = processor.parse(protectedContent)
+processor.runSync(tree, file)
+```
+
 ## Documentation
 
 - EN: <https://airalogy.github.io/aimd/en/packages/aimd-core>
