@@ -287,7 +287,7 @@ export interface AimdStepField {
   /** Step id */
   id: string
   /** Step number */
-  step?: number
+  step?: string
   /** Indentation level */
   level?: number
   /** Sequence within the same level */

@@ -89,6 +89,7 @@ test('extracted fields expose canonical id properties only', () => {
 {{var_table|samples, subvars=[sample_id, concentration, volume]}}
 
 {{step|sample_preparation}}
+{{step|buffer_setup, 2}}
 {{step|data_analysis}}
 `)
 
@@ -96,7 +97,9 @@ test('extracted fields expose canonical id properties only', () => {
   assert.equal(fields.var_table[0]?.subvars?.[0]?.id, 'sample_id')
 
   assert.equal(fields.stepHierarchy?.[0]?.id, 'sample_preparation')
-  assert.equal(fields.stepHierarchy?.[0]?.nextId, 'data_analysis')
-  assert.equal(fields.stepHierarchy?.[1]?.id, 'data_analysis')
-  assert.equal(fields.stepHierarchy?.[1]?.prevId, 'sample_preparation')
+  assert.equal(fields.stepHierarchy?.[0]?.step, '1')
+  assert.equal(fields.stepHierarchy?.[1]?.id, 'buffer_setup')
+  assert.equal(fields.stepHierarchy?.[1]?.step, '1.1')
+  assert.equal(fields.stepHierarchy?.[2]?.id, 'data_analysis')
+  assert.equal(fields.stepHierarchy?.[2]?.prevId, 'sample_preparation')
 })

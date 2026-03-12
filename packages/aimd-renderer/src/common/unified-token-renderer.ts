@@ -11,7 +11,7 @@ import type {
   AimdVarNode,
   AimdVarTableNode,
 } from "@airalogy/aimd-core/types"
-import type { AimdNode, QuizPreviewOptions } from "@airalogy/aimd-core/types"
+import type { AimdNode, QuizPreviewOptions, RenderContext } from "@airalogy/aimd-core/types"
 import type { ExtractedAimdFields } from "@airalogy/aimd-core/types"
 import type { AimdRendererI18nOptions, AimdRendererMessages } from "../locales"
 import type { AimdComponentRenderer, ElementRenderer, ShikiHighlighter, VueRendererOptions } from "../vue/vue-renderer"
@@ -465,41 +465,109 @@ function createAimdRenderers(options: UnifiedTokenRendererOptions): Record<strin
     ref_step: (node, ctx) => {
       const { id } = node
       const refTarget = "refTarget" in node ? node.refTarget : id
+      const stepSequence = "stepSequence" in node && typeof (node as any).stepSequence === "string"
+        ? (node as any).stepSequence
+        : undefined
+      const displayText = stepSequence ? messages.step.reference(stepSequence) : refTarget
 
       if (AIMDStepRef) {
-        return h(AIMDStepRef, { name: refTarget, type: "step" })
+        return h(AIMDStepRef, { name: refTarget, type: "step", stepSequence })
       }
 
       return h("a", {
         class: "aimd-ref aimd-ref--step",
         href: `#step-${refTarget}`,
+        "data-aimd-step-sequence": stepSequence,
+        title: refTarget,
       }, [
-        h("span", { class: "aimd-ref__icon" }, "🔗"),
-        h("span", { class: "aimd-ref__name" }, refTarget),
+        h("span", { class: "aimd-ref__content" }, [
+          h("span", { class: "aimd-field aimd-field--step aimd-field--readonly" }, [
+            h("span", { class: "research-step__sequence" }, displayText),
+          ]),
+        ]),
       ])
     },
 
     ref_var: (node, ctx) => {
       const { id } = node
       const refTarget = "refTarget" in node ? node.refTarget : id
+      const referencedValue = ctx.mode === "edit" ? getReferencedVarDisplayValue(ctx.value, refTarget) : null
 
       if (AIMDStepRef) {
         return h(AIMDStepRef, {
           name: refTarget,
           type: "var",
           contextValue: ctx.value,
+          displayValue: referencedValue ?? undefined,
         })
       }
 
-      return h("a", {
+      if (ctx.mode !== "edit") {
+        return h("a", {
+          class: "aimd-ref aimd-ref--var",
+          href: `#var-${refTarget}`,
+          title: refTarget,
+        }, [
+          h("span", { class: "aimd-ref__icon" }, "📌"),
+          h("span", { class: "aimd-ref__name" }, refTarget),
+        ])
+      }
+
+      return h("span", {
         class: "aimd-ref aimd-ref--var",
-        href: `#var-${refTarget}`,
+        "data-aimd-ref": refTarget,
+        title: refTarget,
       }, [
-        h("span", { class: "aimd-ref__icon" }, "📌"),
-        h("span", { class: "aimd-ref__name" }, refTarget),
+        h("span", { class: "aimd-ref__content" }, [
+          referencedValue !== null
+            ? h("span", {
+              class: "aimd-field aimd-field--var aimd-field--readonly",
+              "data-aimd-id": refTarget,
+              "data-aimd-scope": "var",
+            }, [
+              h("span", { class: "aimd-field__value" }, referencedValue),
+            ])
+            : h("span", { class: "aimd-field aimd-field--var" }, [
+              h("span", { class: "aimd-field__scope" }, messages.scope.var),
+              h("span", { class: "aimd-field__name" }, refTarget),
+            ]),
+        ]),
       ])
     },
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function getReferencedVarDisplayValue(
+  value: RenderContext["value"] | undefined,
+  refTarget: string,
+): string | null {
+  const fieldData = value?.var?.[refTarget]
+  const resolvedValue = isPlainObject(fieldData) && "value" in fieldData
+    ? fieldData.value
+    : fieldData
+
+  if (resolvedValue === undefined || resolvedValue === null || resolvedValue === "") {
+    return null
+  }
+
+  if (Array.isArray(resolvedValue)) {
+    return resolvedValue.map(item => String(item)).join(", ")
+  }
+
+  if (isPlainObject(resolvedValue)) {
+    try {
+      return JSON.stringify(resolvedValue)
+    }
+    catch {
+      return null
+    }
+  }
+
+  return String(resolvedValue)
 }
 
 /**

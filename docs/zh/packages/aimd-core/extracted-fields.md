@@ -19,7 +19,7 @@
 - `var_table[]` 提供规范字段 `id`
 - `var_table[].subvars[]` 提供规范字段 `id`
 - `quiz[]` 本来就使用 `id`
-- `stepHierarchy[]` 提供 `id`、`parentId`、`prevId`、`nextId`
+- `stepHierarchy[]` 提供 `id`、`step`、`parentId`、`prevId`、`nextId`
 
 ## 示例
 
@@ -40,7 +40,7 @@
       "id": "sample_preparation",
       "level": 1,
       "sequence": 0,
-      "step": 1,
+      "step": "1",
       "nextId": "data_analysis"
     }
   ]

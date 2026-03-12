@@ -52,6 +52,9 @@ import { renderToHtml } from "@airalogy/aimd-renderer"
 const { html } = await renderToHtml("{{quiz|q1}}", {
   locale: "zh-CN",
   messages: {
+    step: {
+      reference: step => `Step ${step}`,
+    },
     quiz: {
       answer: value => `参考答案：${value}`,
     },

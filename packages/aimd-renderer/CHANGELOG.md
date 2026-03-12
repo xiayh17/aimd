@@ -2,6 +2,17 @@
 
 All notable changes to `@airalogy/aimd-renderer` will be documented in this file.
 
+## [2.0.1] - 2026-03-12
+
+### Changed
+
+- In Vue/edit rendering, `ref_var` now prefers the current recorded variable value as a readonly inline reference when `context.value.var[refTarget]` is available, while keeping the raw var id in metadata (`title` / `data-aimd-ref`).
+- Refined default `ref_step` rendering to reuse step-like field styling instead of the generic reference blockquote look, making inline step references visually closer to normal step labels.
+
+### Fixed
+
+- Fixed Vue/edit `ref_step` rendering so step references keep their localized step sequence (`Step 1`, `Step 1.1`, etc.) instead of incorrectly falling back to the raw step id in recorder-driven rendering.
+
 ## [2.0.0] - 2026-03-12
 
 ### Changed

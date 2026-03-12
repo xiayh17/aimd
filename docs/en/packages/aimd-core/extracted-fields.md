@@ -19,7 +19,7 @@ These scopes are still simple `string[]`, and each string is an identifier:
 - `var_table[]` exposes canonical `id`
 - `var_table[].subvars[]` exposes canonical `id`
 - `quiz[]` already exposes `id`
-- `stepHierarchy[]` exposes `id`, `parentId`, `prevId`, `nextId`
+- `stepHierarchy[]` exposes `id`, `step`, `parentId`, `prevId`, `nextId`
 
 ## Example
 
@@ -40,7 +40,7 @@ These scopes are still simple `string[]`, and each string is an identifier:
       "id": "sample_preparation",
       "level": 1,
       "sequence": 0,
-      "step": 1,
+      "step": "1",
       "nextId": "data_analysis"
     }
   ]

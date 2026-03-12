@@ -1381,7 +1381,11 @@ async function rebuildInlineNodes(expectedRequestId?: number, focusSnapshot?: Fo
   recordInitializedDuringRender = false
   const rendered = await renderToVue(props.content || "", {
     locale: resolvedLocale.value,
-    mode: "edit",
+    context: {
+      mode: "edit",
+      readonly: props.readonly,
+      value: localRecord as Record<string, Record<string, unknown>>,
+    },
     aimdRenderers: {
       var: node => renderInlineVar(node as AimdVarNode),
       var_table: node => renderInlineVarTable(node as AimdVarTableNode),
@@ -1592,6 +1596,16 @@ watch(
 .aimd-protocol-recorder__content :deep(.aimd-field--var .aimd-field__scope) {
   background: #dceaff;
   color: #255eab;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-ref--var .aimd-field--var) {
+  background: #e3f2fd;
+  border-color: #90caf9;
+  color: #1565c0;
+}
+
+.aimd-protocol-recorder__content :deep(.aimd-ref--var .aimd-field__value) {
+  color: #1565c0;
 }
 
 .aimd-protocol-recorder__content :deep(.aimd-field--step) {

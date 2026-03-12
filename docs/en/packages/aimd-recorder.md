@@ -15,6 +15,7 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
 - Reusable quiz answer component: `AimdQuizRecorder`.
 - Built-in var input handling for `CurrentTime`, `UserName`, `AiralogyMarkdown`.
 - Input handling for `choice`, `blank`, and `open` quiz types.
+- In recorder/edit mode, `ref_var` references display current var values as readonly inline content when available.
 
 ## Example
 

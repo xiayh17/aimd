@@ -3,6 +3,7 @@
 AIMD 记录 UI 组件与样式集合，包含协议内联录入组件与可复用题目作答控件。
 
 内置变量控件支持 `CurrentTime`、`UserName`、`AiralogyMarkdown`。
+在 recorder/edit 模式下，`ref_var` 如果已经有记录值，会优先以只读内联内容显示该值。
 
 ## 安装
 

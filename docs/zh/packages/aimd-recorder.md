@@ -15,6 +15,7 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
   在 Markdown 渲染位置直接插入 `var / var_table / step / check / quiz` 的记录控件。
 - 提供可复用题目控件 `AimdQuizRecorder`（单独使用 quiz 输入时可复用）。
 - 内置变量控件支持 `CurrentTime`、`UserName`、`AiralogyMarkdown`。
+- 在 recorder/edit 模式下，`ref_var` 如果已经有记录值，会优先以只读内联内容显示该值。
 
 ## 协议内联录入示例（推荐）
 

@@ -432,7 +432,7 @@ const remarkAimd: Plugin<[RemarkAimdOptions?], Root> = (options = {}) => {
         id: step.id,
         level: step.level,
         sequence: step.sequence,
-        step: Number.parseInt(step.step) || 0,
+        step: step.step,
         hasCheck: step.check,
         parentId: step.parentId,
         prevId: step.prevId,

@@ -67,6 +67,98 @@ function createAimdParseInput(content: string) {
   }
 }
 
+function buildStepSequenceMap(fields: ExtractedAimdFields): Map<string, string> {
+  const sequenceMap = new Map<string, string>()
+
+  for (const step of fields.stepHierarchy || []) {
+    if (typeof step.id === "string" && step.id.trim() && typeof step.step === "string" && step.step.trim()) {
+      sequenceMap.set(step.id, step.step)
+    }
+  }
+
+  return sequenceMap
+}
+
+function annotateStepReferenceSequence(
+  tree: HastRoot,
+  fields: ExtractedAimdFields,
+  options: AimdRendererOptions,
+): void {
+  const stepSequenceMap = buildStepSequenceMap(fields)
+  if (stepSequenceMap.size === 0) {
+    return
+  }
+
+  const messages = createAimdRendererMessages(options.locale, options.messages)
+
+  const visitNode = (node: HastRoot | Element): void => {
+    if (node.type === "element") {
+      const element = node as Element
+      const aimdType = element.properties?.["data-aimd-type"] || element.properties?.dataAimdType
+
+      if (aimdType === "ref_step") {
+        const refTarget = element.properties?.["data-aimd-id"] || element.properties?.dataAimdId
+        if (typeof refTarget === "string") {
+          const stepSequence = stepSequenceMap.get(refTarget)
+          if (stepSequence) {
+            element.properties["data-aimd-step-sequence"] = stepSequence
+            element.properties.title = refTarget
+
+            const aimdData = (element.data as { aimd?: AimdNode } | undefined)?.aimd
+            if (aimdData) {
+              ;(aimdData as any).stepSequence = stepSequence
+            }
+
+            const jsonData = element.properties["data-aimd-json"]
+            if (typeof jsonData === "string") {
+              try {
+                const parsed = JSON.parse(jsonData) as Record<string, unknown>
+                parsed.stepSequence = stepSequence
+                element.properties["data-aimd-json"] = JSON.stringify(parsed)
+              }
+              catch {
+                // Ignore malformed fallback JSON and keep runtime metadata only.
+              }
+            }
+
+            element.children = [{
+              type: "element",
+              tagName: "span",
+              properties: { className: ["aimd-ref__content"] },
+              children: [{
+                type: "element",
+                tagName: "span",
+                properties: { className: ["aimd-field", "aimd-field--step", "aimd-field--readonly"] },
+                children: [{
+                  type: "element",
+                  tagName: "span",
+                  properties: { className: ["research-step__sequence"] },
+                  children: [{ type: "text", value: messages.step.reference(stepSequence) }],
+                } as Element],
+              } as Element],
+            } as Element]
+          }
+        }
+      }
+
+      for (const child of element.children || []) {
+        if (child.type === "element") {
+          visitNode(child)
+        }
+      }
+      return
+    }
+
+    for (const child of node.children) {
+      if (child.type === "element") {
+        visitNode(child)
+      }
+    }
+  }
+
+  visitNode(tree)
+}
+
 /**
  * Map field type to CSS class modifier (BEM format)
  */
@@ -240,7 +332,7 @@ function createAimdHandler(options: AimdRendererOptions = {}) {
   if (isRef) {
     // Reference: blockquote-style with appropriate content
     if (fieldType === "ref_step") {
-      // Step reference: show the referenced step id with research-step__sequence class
+      // Step reference: render with step-like field styling, then patch localized sequence later.
       children.push({
         type: "element",
         tagName: "span",
@@ -249,8 +341,13 @@ function createAimdHandler(options: AimdRendererOptions = {}) {
           {
             type: "element",
             tagName: "span",
-            properties: { className: ["research-step__sequence"] },
-            children: [{ type: "text", value: id }],
+            properties: { className: ["aimd-field", "aimd-field--step", "aimd-field--readonly"] },
+            children: [{
+              type: "element",
+              tagName: "span",
+              properties: { className: ["research-step__sequence"] },
+              children: [{ type: "text", value: id }],
+            } as Element],
           } as Element,
         ],
       } as Element)
@@ -733,7 +830,6 @@ export async function renderToHtml(
   const tree = processor.parse(protectedContent)
   const hastTree = await processor.run(tree, file) as HastRoot
 
-  const html = toHtml(hastTree, { allowDangerousHtml: true })
   const fields = (file.data.aimdFields as ExtractedAimdFields) || {
     var: [],
     var_table: [],
@@ -746,6 +842,8 @@ export async function renderToHtml(
     cite: [],
     fig: [],
   }
+  annotateStepReferenceSequence(hastTree, fields, options)
+  const html = toHtml(hastTree, { allowDangerousHtml: true })
 
   return { html, fields }
 }
@@ -764,7 +862,6 @@ export async function renderToVue(
   const tree = processor.parse(protectedContent)
   const hastTree = await processor.run(tree, file) as HastRoot
 
-  const nodes = renderToVNodes(hastTree, options)
   const fields = (file.data.aimdFields as ExtractedAimdFields) || {
     var: [],
     var_table: [],
@@ -777,6 +874,8 @@ export async function renderToVue(
     cite: [],
     fig: [],
   }
+  annotateStepReferenceSequence(hastTree, fields, options)
+  const nodes = renderToVNodes(hastTree, options)
 
   return { nodes, fields }
 }
@@ -847,7 +946,6 @@ export function renderToHtmlSync(
   const tree = processor.parse(protectedContent)
   const hastTree = processor.runSync(tree, file) as HastRoot
 
-  const html = toHtml(hastTree, { allowDangerousHtml: true })
   const fields = (file.data.aimdFields as ExtractedAimdFields) || {
     var: [],
     var_table: [],
@@ -860,6 +958,8 @@ export function renderToHtmlSync(
     cite: [],
     fig: [],
   }
+  annotateStepReferenceSequence(hastTree, fields, options)
+  const html = toHtml(hastTree, { allowDangerousHtml: true })
 
   return { html, fields }
 }

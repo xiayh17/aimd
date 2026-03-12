@@ -33,6 +33,7 @@ export interface AimdRendererMessages {
   }
   step: {
     sequence: (step: string | number) => string
+    reference: (step: string | number) => string
   }
   figure: {
     reference: (value: string | number) => string
@@ -85,6 +86,7 @@ const EN_US_MESSAGES: AimdRendererMessages = {
   },
   step: {
     sequence: step => `Step ${step} :`,
+    reference: step => `Step ${step}`,
   },
   figure: {
     reference: value => `figure ${value}`,
@@ -113,6 +115,7 @@ const ZH_CN_MESSAGES: AimdRendererMessages = {
   },
   step: {
     sequence: step => `步骤 ${step}：`,
+    reference: step => `步骤${step}`,
   },
   figure: {
     reference: value => `图 ${value}`,

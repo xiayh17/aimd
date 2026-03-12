@@ -33,6 +33,10 @@ Is active: {{var|is_active: bool = true}}
 
 {{step|sample_preparation}} Prepare the sample and confirm sample name {{ref_var|sample_name}}.
 
+{{step|buffer_setup, 2}} Prepare the dilution buffer for the sample.
+
+{{step|pipette_reagents, 3}} Add water and buffer according to the recorded amounts.
+
 {{step|data_analysis}} Analyze the data and verify temperature {{ref_var|temperature}}.
 
 ## Quality Checks
@@ -98,6 +102,8 @@ rubric: Mention both reaction rate and sample stability.
 ## References
 
 Referenced step: {{ref_step|sample_preparation}}
+
+Nested step reference: {{ref_step|buffer_setup}}
 
 ## Markdown Features
 

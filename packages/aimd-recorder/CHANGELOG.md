@@ -2,6 +2,20 @@
 
 All notable changes to `@airalogy/aimd-recorder` will be documented in this file.
 
+## [1.4.2] - 2026-03-12
+
+### Changed
+
+- `AimdProtocolRecorder` now passes the live record into renderer edit context so inline `ref_var` references show the current var value as readonly content when available, instead of always showing the raw var id.
+- Updated `ref_step` presentation styles so inline step references reuse the same step-like visual language instead of the generic reference blockquote styling.
+- Aligned `ref_var` presentation with normal var styling by removing the generic reference block shell and faded state.
+- Unified inline check label typography with var/step identifiers by raising `check` id/label weight to match the other AIMD field tags.
+- Aligned recorder-mode `ref_var` colors with the recorder's actual var field palette so referenced variable values use the same blue treatment as normal var inputs.
+
+### Fixed
+
+- Synced with the renderer-side `ref_step` fix so recorder-mode step references keep localized step numbers instead of regressing to raw step ids.
+
 ## [1.4.0] - 2026-03-12
 
 ### Added

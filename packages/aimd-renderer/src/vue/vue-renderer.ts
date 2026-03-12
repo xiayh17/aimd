@@ -363,16 +363,22 @@ const defaultAimdRenderers: Record<string, AimdComponentRenderer> = {
   ref_step: (node, ctx) => {
     const { id } = node
     const refTarget = "refTarget" in node ? node.refTarget : id
+    const stepSequence = "stepSequence" in node && typeof (node as any).stepSequence === "string"
+      ? (node as any).stepSequence
+      : undefined
+    const displayText = stepSequence ? ctx.messages.step.reference(stepSequence) : refTarget
 
-    // Render as blockquote-style reference with step sequence format
-    // Format: "Step N >" just like the original step rendering
     return h("span", {
       "class": "aimd-ref aimd-ref--step",
       "data-aimd-type": "ref_step",
       "data-aimd-ref": refTarget,
+      "data-aimd-step-sequence": stepSequence,
+      "title": refTarget,
     }, [
       h("span", { class: "aimd-ref__content" }, [
-        h("span", { class: "research-step__sequence" }, `${refTarget}`),
+        h("span", { class: "aimd-field aimd-field--step aimd-field--readonly" }, [
+          h("span", { class: "research-step__sequence" }, displayText),
+        ]),
       ]),
     ])
   },
@@ -380,18 +386,27 @@ const defaultAimdRenderers: Record<string, AimdComponentRenderer> = {
   ref_var: (node, ctx) => {
     const { id } = node
     const refTarget = "refTarget" in node ? node.refTarget : id
+    const referencedValue = ctx.mode === "edit" ? getReferencedVarDisplayValue(ctx.value, refTarget) : null
 
-    // Render as blockquote-style reference with the variable field content
     return h("span", {
       "class": "aimd-ref aimd-ref--var",
       "data-aimd-type": "ref_var",
       "data-aimd-ref": refTarget,
+      "title": refTarget,
     }, [
       h("span", { class: "aimd-ref__content" }, [
-        h("span", { class: "aimd-field aimd-field--var" }, [
-          h("span", { class: "aimd-field__scope" }, ctx.messages.scope.var),
-          h("span", { class: "aimd-field__name" }, refTarget),
-        ]),
+        referencedValue !== null
+          ? h("span", {
+            class: "aimd-field aimd-field--var aimd-field--readonly",
+            "data-aimd-id": refTarget,
+            "data-aimd-scope": "var",
+          }, [
+            h("span", { class: "aimd-field__value" }, referencedValue),
+          ])
+          : h("span", { class: "aimd-field aimd-field--var" }, [
+            h("span", { class: "aimd-field__scope" }, ctx.messages.scope.var),
+            h("span", { class: "aimd-field__name" }, refTarget),
+          ]),
       ]),
     ])
   },
@@ -615,11 +630,13 @@ function preprocessFigures(node: HastRoot | RootContent, figCtx: FigureContext):
  * Parse AIMD node from HAST element properties
  */
 function parseAimdFromProps(props: Record<string, unknown>): AimdNode | undefined {
+  let parsedFromJson: Record<string, unknown> | undefined
+
   // Try to get from JSON attribute first
   const jsonData = props["data-aimd-json"] || props.dataAimdJson
   if (jsonData && typeof jsonData === "string") {
     try {
-      return JSON.parse(jsonData) as AimdNode
+      parsedFromJson = JSON.parse(jsonData) as Record<string, unknown>
     }
     catch (e) {
       console.warn("Failed to parse AIMD JSON:", e)
@@ -636,12 +653,24 @@ function parseAimdFromProps(props: Record<string, unknown>): AimdNode | undefine
     return undefined
   }
 
-  const baseNode = {
+  const baseNode: Record<string, unknown> = {
     type: "aimd" as const,
     fieldType: fieldType as AimdNode["fieldType"],
     id,
     scope: (scope || "var") as AimdNode["scope"],
     raw: raw || `{{${fieldType}|${id}}}`,
+  }
+
+  const stepSequence = props["data-aimd-step-sequence"] || props.dataAimdStepSequence
+  if (parsedFromJson) {
+    if (typeof stepSequence === "string" && stepSequence.trim()) {
+      parsedFromJson.stepSequence = stepSequence
+    }
+    return parsedFromJson as unknown as AimdNode
+  }
+
+  if (typeof stepSequence === "string" && stepSequence.trim()) {
+    baseNode.stepSequence = stepSequence
   }
 
   // Add step-specific properties
@@ -683,7 +712,7 @@ function parseAimdFromProps(props: Record<string, unknown>): AimdNode | undefine
     } as AimdNode
   }
 
-  return baseNode as AimdNode
+  return baseNode as unknown as AimdNode
 }
 
 /**
@@ -719,6 +748,35 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function getReferencedVarDisplayValue(
+  value: RenderContext["value"] | undefined,
+  refTarget: string,
+): string | null {
+  const fieldData = value?.var?.[refTarget]
+  const resolvedValue = isPlainObject(fieldData) && "value" in fieldData
+    ? fieldData.value
+    : fieldData
+
+  if (resolvedValue === undefined || resolvedValue === null || resolvedValue === "") {
+    return null
+  }
+
+  if (Array.isArray(resolvedValue)) {
+    return resolvedValue.map(item => String(item)).join(", ")
+  }
+
+  if (isPlainObject(resolvedValue)) {
+    try {
+      return JSON.stringify(resolvedValue)
+    }
+    catch {
+      return null
+    }
+  }
+
+  return String(resolvedValue)
 }
 
 /**

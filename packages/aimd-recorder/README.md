@@ -3,6 +3,7 @@
 Reusable recording UI for AIMD, including inline protocol recorder, quiz answer components, and styles.
 
 Built-in variable input types include `CurrentTime`, `UserName`, and `AiralogyMarkdown`.
+In recorder/edit mode, `ref_var` references display current var values as readonly inline content when available.
 
 ## Install
 
