@@ -11,7 +11,7 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
 ## 核心能力
 
 - 通过 `@airalogy/aimd-recorder/styles` 提供 recorder 样式。
-- 提供协议内联录入组件 `AimdProtocolRecorder`：
+- 提供协议内联录入组件 `AimdRecorder`：
   在 Markdown 渲染位置直接插入 `var / var_table / step / check / quiz` 的记录控件。
 - 提供可复用题目控件 `AimdQuizRecorder`（单独使用 quiz 输入时可复用）。
 - 内置变量控件支持 `CurrentTime`、`UserName`、`AiralogyMarkdown`。
@@ -23,7 +23,7 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
 <script setup lang="ts">
 import { ref } from "vue"
 import {
-  AimdProtocolRecorder,
+  AimdRecorder,
   createEmptyProtocolRecordData,
   type AimdProtocolRecordData,
 } from "@airalogy/aimd-recorder"
@@ -34,12 +34,13 @@ const content = ref(`# Protocol
 样本名：{{var|sample_name: str}}
 记录者：{{var|operator: UserName}}
 记录时间：{{var|current_time: CurrentTime}}
+温度设置：{{var|temperature: float = 25.0}}
 实验摘要：{{var|summary: AiralogyMarkdown}}`)
 const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 </script>
 
 <template>
-  <AimdProtocolRecorder
+  <AimdRecorder
     v-model="record"
     :content="content"
     locale="zh-CN"
@@ -61,10 +62,10 @@ const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 
 ## 语言
 
-`AimdProtocolRecorder` 和 `AimdQuizRecorder` 都支持通过 `locale` 切换内建标签：
+`AimdRecorder` 和 `AimdQuizRecorder` 都支持通过 `locale` 切换内建标签：
 
 ```vue
-<AimdProtocolRecorder locale="zh-CN" />
+<AimdRecorder locale="zh-CN" />
 <AimdQuizRecorder :quiz="quiz" locale="zh-CN" />
 ```
 
@@ -74,11 +75,11 @@ const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 
 ```vue
 <script setup lang="ts">
-import { AimdProtocolRecorder } from "@airalogy/aimd-recorder"
+import { AimdRecorder } from "@airalogy/aimd-recorder"
 </script>
 
 <template>
-  <AimdProtocolRecorder
+  <AimdRecorder
     locale="zh-CN"
     :messages="{
       step: {
@@ -91,6 +92,8 @@ import { AimdProtocolRecorder } from "@airalogy/aimd-recorder"
   />
 </template>
 ```
+
+`AimdProtocolRecorder` 仍然导出为已废弃的兼容别名，但新的使用方式建议直接写 `AimdRecorder`。
 
 ## 仅题目控件示例
 

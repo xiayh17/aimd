@@ -68,6 +68,8 @@ export interface AimdVarDefinition {
   id: string
   type?: string
   default?: string | number | boolean | null
+  /** Original AIMD default literal, preserved for UI display when lexical form matters. */
+  defaultRaw?: string
   required?: boolean
   subvars?: Record<string, AimdVarDefinition>
   /** Additional kwargs like pattern, title, description, etc. */

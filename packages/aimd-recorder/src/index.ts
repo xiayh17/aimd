@@ -8,8 +8,13 @@
 
 // Re-export styles
 import './styles/aimd.css'
+import { AimdProtocolRecorder as DeprecatedAimdProtocolRecorder } from './components'
 
-export { AimdProtocolRecorder, AimdRecorder, AimdQuizRecorder } from './components'
+export { AimdRecorder, AimdQuizRecorder } from './components'
+/**
+ * @deprecated Use `AimdRecorder` instead.
+ */
+export const AimdProtocolRecorder = DeprecatedAimdProtocolRecorder
 export {
   createAimdRecorderMessages,
   DEFAULT_AIMD_RECORDER_LOCALE,

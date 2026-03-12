@@ -76,6 +76,16 @@ test('template protection does not break normal inline vars', () => {
   assert.deepEqual(fields.var, ['water_volume_ml'])
 })
 
+test('float defaults preserve their original literal for UI display', () => {
+  const { tree } = parseAimd('Temperature: {{var|temperature: float = 25.0}}')
+  const aimdNode = findAimdNode(tree)
+
+  assert.equal(aimdNode?.fieldType, 'var')
+  assert.equal(aimdNode?.definition?.id, 'temperature')
+  assert.equal(aimdNode?.definition?.default, 25)
+  assert.equal(aimdNode?.definition?.defaultRaw, '25.0')
+})
+
 test('protected AIMD tokens can be restored without external template map', () => {
   const raw = '| Water | {{var|water_volume_ml: float}} mL |'
   const { content: protectedContent } = protectAimdInlineTemplates(raw)

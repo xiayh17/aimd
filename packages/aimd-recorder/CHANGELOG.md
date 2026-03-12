@@ -2,11 +2,18 @@
 
 All notable changes to `@airalogy/aimd-recorder` will be documented in this file.
 
+## [1.4.3] - 2026-03-12
+
+### Fixed
+
+- Fixed decimal var input handling in `AimdRecorder` so `float`/`number` fields can enter values like `1.1` without the controlled input immediately collapsing the decimal point mid-typing.
+- Preserved authored float default literals like `25.0` for the initial recorder display, so decimal defaults no longer collapse to `25` before the user edits the field.
+
 ## [1.4.2] - 2026-03-12
 
 ### Changed
 
-- `AimdProtocolRecorder` now passes the live record into renderer edit context so inline `ref_var` references show the current var value as readonly content when available, instead of always showing the raw var id.
+- `AimdRecorder` now passes the live record into renderer edit context so inline `ref_var` references show the current var value as readonly content when available, instead of always showing the raw var id.
 - Updated `ref_step` presentation styles so inline step references reuse the same step-like visual language instead of the generic reference blockquote styling.
 - Aligned `ref_var` presentation with normal var styling by removing the generic reference block shell and faded state.
 - Unified inline check label typography with var/step identifiers by raising `check` id/label weight to match the other AIMD field tags.
@@ -20,7 +27,7 @@ All notable changes to `@airalogy/aimd-recorder` will be documented in this file
 
 ### Added
 
-- Added built-in runtime locale support for recorder UI via `locale` (`en-US` / `zh-CN`) on both `AimdProtocolRecorder` and `AimdQuizRecorder`.
+- Added built-in runtime locale support for recorder UI via `locale` (`en-US` / `zh-CN`) on both `AimdRecorder` and `AimdQuizRecorder`.
 - Added `messages` overrides plus exported locale helpers (`createAimdRecorderMessages`, `resolveAimdRecorderLocale`) for customizing recorder labels without forking the components.
 
 ## [1.2.0] - 2026-03-05

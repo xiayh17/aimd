@@ -17,7 +17,7 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
 <script setup lang="ts">
 import { ref } from "vue"
 import {
-  AimdProtocolRecorder,
+  AimdRecorder,
   createEmptyProtocolRecordData,
   type AimdProtocolRecordData,
 } from "@airalogy/aimd-recorder"
@@ -28,12 +28,13 @@ const content = ref(`# Protocol
 样本名：{{var|sample_name: str}}
 记录者：{{var|operator: UserName}}
 记录时间：{{var|current_time: CurrentTime}}
+温度设置：{{var|temperature: float = 25.0}}
 实验摘要：{{var|summary: AiralogyMarkdown}}`)
 const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 </script>
 
 <template>
-  <AimdProtocolRecorder
+  <AimdRecorder
     v-model="record"
     :content="content"
     locale="zh-CN"
@@ -43,6 +44,7 @@ const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 ```
 
 通过 `locale` 可以切换 recorder 内建标签（`en-US` / `zh-CN`）。
+`AimdProtocolRecorder` 仍保留为已废弃的兼容别名，但新的代码建议直接使用 `AimdRecorder`。
 
 `record` 数据结构：
 

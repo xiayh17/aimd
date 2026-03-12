@@ -90,6 +90,13 @@ interface VarTableDragState {
   rowIndex: number
 }
 
+interface VarInputDisplayOverride {
+  display: string
+  expectedValue: unknown
+}
+
+const varInputDisplayOverrides = reactive<Record<string, VarInputDisplayOverride>>({})
+
 function cloneRecordData(value: AimdProtocolRecordData): AimdProtocolRecordData {
   return JSON.parse(JSON.stringify(value))
 }
@@ -598,6 +605,51 @@ function getVarInputDisplayValue(value: unknown, kind: VarInputKind): string | n
   return String(normalized)
 }
 
+function getVarInitialDisplayOverride(node: AimdVarNode, type: string | undefined): VarInputDisplayOverride | null {
+  const raw = node.definition?.defaultRaw?.trim()
+  if (!raw) {
+    return null
+  }
+
+  const normalizedType = normalizeVarTypeName(type)
+  if (normalizedType === "int" || normalizedType === "integer") {
+    return null
+  }
+
+  if (getVarInputKind(type) !== "number" || typeof node.definition?.default !== "number") {
+    return null
+  }
+
+  if (!raw.includes(".") || String(node.definition.default) === raw) {
+    return null
+  }
+
+  return {
+    display: raw,
+    expectedValue: node.definition.default,
+  }
+}
+
+function getVarDisplayValue(id: string, value: unknown, kind: VarInputKind): string | number {
+  const override = varInputDisplayOverrides[id]
+  const normalized = unwrapStructuredValue(value)
+
+  if (override) {
+    if (kind === "number" && Object.is(normalized, override.expectedValue)) {
+      return override.display
+    }
+    delete varInputDisplayOverrides[id]
+  }
+
+  return getVarInputDisplayValue(value, kind)
+}
+
+function clearVarInputDisplayOverride(id: string) {
+  if (id in varInputDisplayOverrides) {
+    delete varInputDisplayOverrides[id]
+  }
+}
+
 function parseVarInputValue(rawValue: string, type: string | undefined, kind: VarInputKind): unknown {
   const normalizedType = normalizeVarTypeName(type)
 
@@ -610,6 +662,15 @@ function parseVarInputValue(rawValue: string, type: string | undefined, kind: Va
     if (!text) {
       return ""
     }
+
+    if (
+      normalizedType !== "int"
+      && normalizedType !== "integer"
+      && (/^[+-]?$/.test(text) || /^[+-]?(?:\d+)?\.$/.test(text))
+    ) {
+      return rawValue
+    }
+
     const parsed = normalizedType === "int" || normalizedType === "integer"
       ? Number.parseInt(text, 10)
       : Number.parseFloat(text)
@@ -1064,8 +1125,14 @@ function renderInlineVar(node: AimdVarNode): VNode {
   const type = node.definition?.type || "str"
   const normalizedType = normalizeVarTypeName(type)
   const inputKind = getVarInputKind(type)
+  const isIntegerInput = normalizedType === "int" || normalizedType === "integer"
+  const usesDecimalTextInput = inputKind === "number" && !isIntegerInput
   if (!(id in localRecord.var)) {
     localRecord.var[id] = getVarInitialValue(node, type)
+    const initialDisplayOverride = getVarInitialDisplayOverride(node, type)
+    if (initialDisplayOverride) {
+      varInputDisplayOverrides[id] = initialDisplayOverride
+    }
     recordInitializedDuringRender = true
   }
   if (inputKind === "datetime") {
@@ -1076,9 +1143,11 @@ function renderInlineVar(node: AimdVarNode): VNode {
     }
   }
 
-  const htmlInputType = inputKind === "datetime" ? "datetime-local" : inputKind
+  const htmlInputType = inputKind === "datetime"
+    ? "datetime-local"
+    : (usesDecimalTextInput ? "text" : inputKind)
   const placeholder = getVarPlaceholder(node)
-  const displayValue = getVarInputDisplayValue(localRecord.var[id], inputKind)
+  const displayValue = getVarDisplayValue(id, localRecord.var[id], inputKind)
   const wrapperStyle = {
     width: calculateVarStackWidth(id, inputKind),
     maxWidth: "100%",
@@ -1130,6 +1199,7 @@ function renderInlineVar(node: AimdVarNode): VNode {
         onVnodeUpdated: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
         onInput: (event: Event) => {
           const target = event.target as HTMLTextAreaElement
+          clearVarInputDisplayOverride(id)
           localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
           markRecordChanged()
         },
@@ -1159,6 +1229,7 @@ function renderInlineVar(node: AimdVarNode): VNode {
         },
         onInput: (event: Event) => {
           const target = event.target as HTMLTextAreaElement
+          clearVarInputDisplayOverride(id)
           localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
           applyVarStackWidth(target, inputKind)
           syncAutoWrapTextareaHeight(target)
@@ -1173,16 +1244,18 @@ function renderInlineVar(node: AimdVarNode): VNode {
       "data-rec-focus-key": `var:${id}`,
       class: "aimd-rec-inline__input aimd-rec-inline__input--stacked",
       type: htmlInputType,
+      inputmode: inputKind === "number" ? (isIntegerInput ? "numeric" : "decimal") : undefined,
       disabled: props.readonly,
       placeholder,
       step: inputKind === "number"
-        ? (normalizedType === "int" || normalizedType === "integer" ? "1" : "any")
+        ? (isIntegerInput ? "1" : undefined)
         : (inputKind === "time" ? "1" : undefined),
       value: displayValue,
       onVnodeMounted: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
       onVnodeUpdated: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
       onInput: (event: Event) => {
         const target = event.target as HTMLInputElement
+        clearVarInputDisplayOverride(id)
         localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
         markRecordChanged()
       },

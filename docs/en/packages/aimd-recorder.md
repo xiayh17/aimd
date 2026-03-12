@@ -11,7 +11,7 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
 ## Main Capabilities
 
 - Recorder UI styles via `@airalogy/aimd-recorder/styles`.
-- Inline protocol recorder component: `AimdProtocolRecorder` (render + input in-place).
+- Inline protocol recorder component: `AimdRecorder` (render + input in-place).
 - Reusable quiz answer component: `AimdQuizRecorder`.
 - Built-in var input handling for `CurrentTime`, `UserName`, `AiralogyMarkdown`.
 - Input handling for `choice`, `blank`, and `open` quiz types.
@@ -23,7 +23,7 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
 <script setup lang="ts">
 import { ref } from "vue"
 import {
-  AimdProtocolRecorder,
+  AimdRecorder,
   createEmptyProtocolRecordData,
   type AimdProtocolRecordData,
 } from "@airalogy/aimd-recorder"
@@ -34,12 +34,13 @@ const content = ref(`# Protocol
 Sample: {{var|sample_name: str}}
 Operator: {{var|operator: UserName}}
 Record Time: {{var|current_time: CurrentTime}}
+Temperature: {{var|temperature: float = 25.0}}
 Notes: {{var|notes: AiralogyMarkdown}}`)
 const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 </script>
 
 <template>
-  <AimdProtocolRecorder
+  <AimdRecorder
     v-model="record"
     :content="content"
     locale="en-US"
@@ -61,10 +62,10 @@ const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 
 ## Locale
 
-Both `AimdProtocolRecorder` and `AimdQuizRecorder` accept `locale` to switch built-in recorder labels:
+Both `AimdRecorder` and `AimdQuizRecorder` accept `locale` to switch built-in recorder labels:
 
 ```vue
-<AimdProtocolRecorder locale="zh-CN" />
+<AimdRecorder locale="zh-CN" />
 <AimdQuizRecorder :quiz="quiz" locale="zh-CN" />
 ```
 
@@ -74,11 +75,11 @@ If you need to fine-tune built-in recorder labels, override `messages`:
 
 ```vue
 <script setup lang="ts">
-import { AimdProtocolRecorder } from "@airalogy/aimd-recorder"
+import { AimdRecorder } from "@airalogy/aimd-recorder"
 </script>
 
 <template>
-  <AimdProtocolRecorder
+  <AimdRecorder
     locale="en-US"
     :messages="{
       step: {
@@ -91,3 +92,5 @@ import { AimdProtocolRecorder } from "@airalogy/aimd-recorder"
   />
 </template>
 ```
+
+`AimdProtocolRecorder` is still exported as a deprecated compatibility alias, but new usage should prefer `AimdRecorder`.

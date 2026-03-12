@@ -298,9 +298,11 @@ function parseSimpleVarDef(content: string): AimdVarDefinition {
   if (!mainPart.includes(":")) {
     const eqIndex = mainPart.indexOf("=")
     if (eqIndex > 0) {
+      const defaultRaw = mainPart.slice(eqIndex + 1).trim()
       const result: AimdVarDefinition = {
         id: mainPart.slice(0, eqIndex).trim(),
-        default: parseDefaultValue(mainPart.slice(eqIndex + 1).trim()),
+        default: parseDefaultValue(defaultRaw),
+        defaultRaw,
       }
       if (Object.keys(kvParams).length > 0) {
         result.kwargs = kvParams
@@ -321,10 +323,12 @@ function parseSimpleVarDef(content: string): AimdVarDefinition {
   const eqIndex = rest.indexOf("=")
   let type: string
   let defaultValue: string | number | boolean | null | undefined
+  let defaultRaw: string | undefined
 
   if (eqIndex > 0) {
     type = rest.slice(0, eqIndex).trim()
-    defaultValue = parseDefaultValue(rest.slice(eqIndex + 1).trim())
+    defaultRaw = rest.slice(eqIndex + 1).trim()
+    defaultValue = parseDefaultValue(defaultRaw)
   }
   else {
     type = rest.trim()
@@ -334,6 +338,7 @@ function parseSimpleVarDef(content: string): AimdVarDefinition {
 
   if (defaultValue !== undefined) {
     result.default = defaultValue
+    result.defaultRaw = defaultRaw
   }
 
   if (Object.keys(kvParams).length > 0) {
