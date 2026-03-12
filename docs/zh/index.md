@@ -10,7 +10,8 @@ hero:
       link: /zh/packages/
     - theme: alt
       text: 打开 Demo
-      link: /zh/demo
+      link: /demo/
+      target: _self
 features:
   - icon: "🧠"
     title: aimd-core

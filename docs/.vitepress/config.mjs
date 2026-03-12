@@ -2,6 +2,10 @@ import { defineConfig } from 'vitepress'
 
 import enPackagesSidebar from './sidebars/en/packages.mjs'
 import zhPackagesSidebar from './sidebars/zh/packages.mjs'
+import {
+  aimdInjection,
+  aimdLanguage,
+} from '../../packages/aimd-core/src/syntax/aimd-grammar.ts'
 
 const normalizeBasePath = (basePath) => {
   if (!basePath || basePath === '/') return '/'
@@ -26,6 +30,17 @@ const inferBasePathFromGitHub = () => {
 
 const base = normalizeBasePath(process.env.BASE_PATH || inferBasePathFromGitHub())
 const githubLink = 'https://github.com/airalogy/aimd'
+const legacyDemoHashRedirectScript = `(() => {
+  const { hash, search } = window.location
+  const match = hash.match(/^#\\/demo(?:\\/(.*))?\\/?$/)
+  if (!match) return
+
+  const route = match[1]
+    ? \`#/\${match[1].replace(/^\\/+|\\/+$/g, '')}\`
+    : ''
+
+  window.location.replace(${JSON.stringify(base)} + 'demo/' + search + route)
+})()`
 
 const enRootSidebar = [
   {
@@ -60,6 +75,12 @@ export default defineConfig({
   lang: 'en-US',
   description: 'AIMD package documentation',
   base,
+  head: [
+    ['script', {}, legacyDemoHashRedirectScript],
+  ],
+  ignoreDeadLinks: [
+    /^\/demo(?:\/index)?(?:\/)?$/,
+  ],
   locales: {
     en: {
       label: 'English',
@@ -97,6 +118,10 @@ export default defineConfig({
     ],
   },
   markdown: {
+    languages: [
+      aimdLanguage,
+      aimdInjection,
+    ],
     lineNumbers: false,
     config(md) {
       const defaultRender =

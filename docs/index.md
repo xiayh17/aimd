@@ -12,10 +12,16 @@ hero:
       link: /zh/
     - theme: alt
       text: Quick Demo
-      link: /en/demo
+      link: /demo/
+      target: _self
 ---
+
+<script setup>
+import { withBase } from 'vitepress'
+
+const demoHref = withBase('/demo/')
+</script>
 
 # Quick Experience
 
-- [Open Demo (English)](/en/demo)
-- [打开 Demo（中文）](/zh/demo)
+- <a :href="demoHref" target="_self">Open Demo</a>
