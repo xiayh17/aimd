@@ -1,25 +1,41 @@
 import type { Editor } from '@milkdown/kit/core'
+import {
+  createAimdEditorMessages,
+  DEFAULT_AIMD_EDITOR_LOCALE,
+  type AimdEditorLocale,
+  type AimdEditorMessages,
+  type AimdEditorMessagesInput,
+} from './locales'
 
-export interface AimdFieldType {
+export interface AimdFieldTypeDefinition {
   type: string
-  label: string
   icon: string
   svgIcon: string
-  desc: string
   color: string
 }
 
-export interface MdToolbarItem {
+export interface AimdFieldType extends AimdFieldTypeDefinition {
+  label: string
+  desc: string
+}
+
+export interface MdToolbarItemDefinition {
   action: string
-  label?: string
-  title?: string
   style?: string
   svgIcon?: string
+}
+
+export interface MdToolbarItem extends MdToolbarItemDefinition {
+  title?: string
 }
 
 export interface AimdEditorProps {
   /** Initial / bound markdown content (v-model) */
   modelValue?: string
+  /** Built-in UI locale */
+  locale?: AimdEditorLocale | string
+  /** Optional overrides for built-in UI copy */
+  messages?: AimdEditorMessagesInput
   /** Initial editor mode */
   mode?: 'source' | 'wysiwyg'
   /** Theme name for Monaco */
@@ -53,38 +69,80 @@ export interface AimdEditorEmits {
 // SVG icon helpers – all 16×16, stroke-based, currentColor
 const _si = (d: string, extra = '') => `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${extra}>${d}</svg>`
 
-export const AIMD_FIELD_TYPES: AimdFieldType[] = [
-  { type: 'var', label: 'Variable', icon: 'x', svgIcon: _si('<path d="M7 4l10 16M17 4L7 20"/>'), desc: 'Define a variable', color: '#2563eb' },
-  { type: 'var_table', label: 'Var Table', icon: '\u229e', svgIcon: _si('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>'), desc: 'Define a variable table', color: '#059669' },
-  { type: 'quiz', label: 'Quiz', icon: '?', svgIcon: _si('<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 2-2 3.5"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/>'), desc: 'Define a quiz item', color: '#7c3aed' },
-  { type: 'step', label: 'Step', icon: '\u25b6', svgIcon: _si('<polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"/>'), desc: 'Define a step', color: '#d97706' },
-  { type: 'check', label: 'Checkpoint', icon: '\u2713', svgIcon: _si('<polyline points="4 12 9 17 20 6"/>'), desc: 'Define a checkpoint', color: '#dc2626' },
-  { type: 'ref_step', label: 'Ref Step', icon: '\u2197', svgIcon: _si('<path d="M7 17L17 7M17 7H8M17 7v9"/>'), desc: 'Reference a defined step', color: '#0891b2' },
-  { type: 'ref_var', label: 'Ref Var', icon: '\u2197', svgIcon: _si('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>'), desc: 'Reference a defined variable', color: '#0891b2' },
-  { type: 'ref_fig', label: 'Ref Fig', icon: '\u2197', svgIcon: _si('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><path d="M21 15l-5-5L5 21"/>'), desc: 'Reference a defined figure', color: '#0891b2' },
-  { type: 'cite', label: 'Citation', icon: '\ud83d\udcd6', svgIcon: _si('<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>'), desc: 'Insert a citation', color: '#6d28d9' },
+const DEFAULT_EDITOR_MESSAGES = createAimdEditorMessages(DEFAULT_AIMD_EDITOR_LOCALE)
+
+export const AIMD_FIELD_TYPE_DEFINITIONS: AimdFieldTypeDefinition[] = [
+  { type: 'var', icon: 'x', svgIcon: _si('<path d="M7 4l10 16M17 4L7 20"/>'), color: '#2563eb' },
+  { type: 'var_table', icon: '\u229e', svgIcon: _si('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>'), color: '#059669' },
+  { type: 'quiz', icon: '?', svgIcon: _si('<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 2-2 3.5"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/>'), color: '#7c3aed' },
+  { type: 'step', icon: '\u25b6', svgIcon: _si('<polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"/>'), color: '#d97706' },
+  { type: 'check', icon: '\u2713', svgIcon: _si('<polyline points="4 12 9 17 20 6"/>'), color: '#dc2626' },
+  { type: 'ref_step', icon: '\u2197', svgIcon: _si('<path d="M7 17L17 7M17 7H8M17 7v9"/>'), color: '#0891b2' },
+  { type: 'ref_var', icon: '\u2197', svgIcon: _si('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>'), color: '#0891b2' },
+  { type: 'ref_fig', icon: '\u2197', svgIcon: _si('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><path d="M21 15l-5-5L5 21"/>'), color: '#0891b2' },
+  { type: 'cite', icon: '\ud83d\udcd6', svgIcon: _si('<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>'), color: '#6d28d9' },
 ]
 
-export const MD_TOOLBAR_ITEMS: MdToolbarItem[] = [
-  { action: 'h1', label: 'H1', title: 'Heading 1', svgIcon: _si('<path d="M4 12h8M4 4v16M12 4v16"/><text x="16.5" y="14" font-size="10" fill="currentColor" stroke="none" font-weight="600">1</text>') },
-  { action: 'h2', label: 'H2', title: 'Heading 2', svgIcon: _si('<path d="M4 12h8M4 4v16M12 4v16"/><path d="M16.5 8.5a2.5 2.5 0 015 0c0 2-5 4-5 6.5h5" stroke-width="1.8"/>') },
-  { action: 'h3', label: 'H3', title: 'Heading 3', svgIcon: _si('<path d="M4 12h8M4 4v16M12 4v16"/><path d="M16.5 8a2 2 0 014 0 2 2 0 01-2.5 2 2 2 0 012.5 2 2 2 0 01-4 0" stroke-width="1.8"/>') },
-  { action: 'bold', label: 'B', title: 'Bold', svgIcon: _si('<path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"/>') },
-  { action: 'italic', label: 'I', title: 'Italic', svgIcon: _si('<line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/>') },
-  { action: 'strikethrough', label: 'S', title: 'Strikethrough', svgIcon: _si('<path d="M16 4c-.5-1.5-2.2-3-5-3-3 0-5 2-5 4.5 0 2 1.5 3.5 5 4.5"/><path d="M3 12h18"/><path d="M8 20c.5 1.5 2.2 3 5 3 3 0 5-2 5-4.5 0-2-1.5-3.5-5-4.5"/>') },
+export const MD_TOOLBAR_ITEM_DEFINITIONS: MdToolbarItemDefinition[] = [
+  { action: 'h1', svgIcon: _si('<path d="M4 12h8M4 4v16M12 4v16"/><text x="16.5" y="14" font-size="10" fill="currentColor" stroke="none" font-weight="600">1</text>') },
+  { action: 'h2', svgIcon: _si('<path d="M4 12h8M4 4v16M12 4v16"/><path d="M16.5 8.5a2.5 2.5 0 015 0c0 2-5 4-5 6.5h5" stroke-width="1.8"/>') },
+  { action: 'h3', svgIcon: _si('<path d="M4 12h8M4 4v16M12 4v16"/><path d="M16.5 8a2 2 0 014 0 2 2 0 01-2.5 2 2 2 0 012.5 2 2 2 0 01-4 0" stroke-width="1.8"/>') },
+  { action: 'bold', svgIcon: _si('<path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"/>') },
+  { action: 'italic', svgIcon: _si('<line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/>') },
+  { action: 'strikethrough', svgIcon: _si('<path d="M16 4c-.5-1.5-2.2-3-5-3-3 0-5 2-5 4.5 0 2 1.5 3.5 5 4.5"/><path d="M3 12h18"/><path d="M8 20c.5 1.5 2.2 3 5 3 3 0 5-2 5-4.5 0-2-1.5-3.5-5-4.5"/>') },
   { action: 'sep1' },
-  { action: 'ul', label: '\u2022', title: 'Unordered List', svgIcon: _si('<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="18" r="1" fill="currentColor"/>') },
-  { action: 'ol', label: '1.', title: 'Ordered List', svgIcon: _si('<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="3" y="7.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">1</text><text x="3" y="13.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">2</text><text x="3" y="19.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">3</text>') },
-  { action: 'blockquote', label: '\u275d', title: 'Blockquote', svgIcon: _si('<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>') },
-  { action: 'code', label: '<>', title: 'Inline Code', svgIcon: _si('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>') },
-  { action: 'codeblock', label: '\u2317', title: 'Code Block', svgIcon: _si('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><rect x="1" y="1" width="22" height="22" rx="3" stroke-dasharray="4 2" stroke-width="1"/>') },
+  { action: 'ul', svgIcon: _si('<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="18" r="1" fill="currentColor"/>') },
+  { action: 'ol', svgIcon: _si('<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="3" y="7.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">1</text><text x="3" y="13.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">2</text><text x="3" y="19.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">3</text>') },
+  { action: 'blockquote', svgIcon: _si('<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>') },
+  { action: 'code', svgIcon: _si('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>') },
+  { action: 'codeblock', svgIcon: _si('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><rect x="1" y="1" width="22" height="22" rx="3" stroke-dasharray="4 2" stroke-width="1"/>') },
   { action: 'sep2' },
-  { action: 'link', label: 'link', title: 'Link', svgIcon: _si('<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>') },
-  { action: 'image', label: 'img', title: 'Image', svgIcon: _si('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><path d="M21 15l-5-5L5 21"/>') },
-  { action: 'table', label: 'tbl', title: 'Table', svgIcon: _si('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>') },
-  { action: 'hr', label: '\u2014', title: 'Horizontal Rule', svgIcon: _si('<line x1="2" y1="12" x2="22" y2="12" stroke-width="2.5"/>') },
-  { action: 'math', label: '\u2211', title: 'Math Formula', svgIcon: _si('<path d="M18 4H6l6 8-6 8h12" stroke-width="2"/>') },
+  { action: 'link', svgIcon: _si('<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>') },
+  { action: 'image', svgIcon: _si('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><path d="M21 15l-5-5L5 21"/>') },
+  { action: 'table', svgIcon: _si('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>') },
+  { action: 'hr', svgIcon: _si('<line x1="2" y1="12" x2="22" y2="12" stroke-width="2.5"/>') },
+  { action: 'math', svgIcon: _si('<path d="M18 4H6l6 8-6 8h12" stroke-width="2"/>') },
 ]
+
+export function createAimdFieldTypes(
+  messages: Pick<AimdEditorMessages, 'fieldTypes'> = DEFAULT_EDITOR_MESSAGES,
+): AimdFieldType[] {
+  return AIMD_FIELD_TYPE_DEFINITIONS.map((fieldType) => {
+    const localized = messages.fieldTypes[fieldType.type as keyof typeof messages.fieldTypes]
+    return {
+      ...fieldType,
+      label: localized?.label || fieldType.type,
+      desc: localized?.desc || '',
+    }
+  })
+}
+
+function isMdToolbarSeparator(item: MdToolbarItemDefinition): boolean {
+  return item.action.startsWith('sep')
+}
+
+export function createMdToolbarItems(
+  messages: Pick<AimdEditorMessages, 'mdToolbar'> = DEFAULT_EDITOR_MESSAGES,
+): MdToolbarItem[] {
+  return MD_TOOLBAR_ITEM_DEFINITIONS.map((item) => {
+    if (isMdToolbarSeparator(item)) return item
+    const title = messages.mdToolbar[item.action as keyof typeof messages.mdToolbar]
+    return {
+      ...item,
+      title: title || item.action,
+    }
+  })
+}
+
+// Backwards-compatible English defaults. Prefer the factory helpers above.
+/**
+ * @deprecated Use `AIMD_FIELD_TYPE_DEFINITIONS` with `createAimdFieldTypes(messages)` instead.
+ */
+export const AIMD_FIELD_TYPES: AimdFieldType[] = createAimdFieldTypes(DEFAULT_EDITOR_MESSAGES)
+/**
+ * @deprecated Use `MD_TOOLBAR_ITEM_DEFINITIONS` with `createMdToolbarItems(messages)` instead.
+ */
+export const MD_TOOLBAR_ITEMS: MdToolbarItem[] = createMdToolbarItems(DEFAULT_EDITOR_MESSAGES)
 
 function toYamlScalar(value: string): string {
   const trimmed = value.trim()
@@ -110,12 +168,19 @@ function toStemLines(value: string, fallback: string): string[] {
   return lines
 }
 
-function parseQuizOptions(input: string): Array<{ key: string, text: string }> {
+function getDefaultOptionText(key: string, messages?: Pick<AimdEditorMessages, 'defaults'>): string {
+  return messages?.defaults.optionText(key) || DEFAULT_EDITOR_MESSAGES.defaults.optionText(key)
+}
+
+function parseQuizOptions(
+  input: string,
+  messages?: Pick<AimdEditorMessages, 'defaults'>,
+): Array<{ key: string, text: string }> {
   const parts = input.split(',').map(s => s.trim()).filter(Boolean)
   if (parts.length === 0) {
     return [
-      { key: 'A', text: 'Option A' },
-      { key: 'B', text: 'Option B' },
+      { key: 'A', text: getDefaultOptionText('A', messages) },
+      { key: 'B', text: getDefaultOptionText('B', messages) },
     ]
   }
 
@@ -123,7 +188,7 @@ function parseQuizOptions(input: string): Array<{ key: string, text: string }> {
     const sepIndex = part.indexOf(':')
     if (sepIndex > 0) {
       const key = part.slice(0, sepIndex).trim() || String.fromCharCode(65 + index)
-      const text = part.slice(sepIndex + 1).trim() || `Option ${key}`
+      const text = part.slice(sepIndex + 1).trim() || getDefaultOptionText(key, messages)
       return { key, text }
     }
 
@@ -159,7 +224,10 @@ function parseOptionalScore(value: string): string | null {
   return String(score)
 }
 
-export function getDefaultAimdFields(type: string): Record<string, string> {
+export function getDefaultAimdFields(
+  type: string,
+  messages?: Pick<AimdEditorMessages, 'defaults'>,
+): Record<string, string> {
   switch (type) {
     case 'var': return { name: '', type: 'str', default: '', title: '' }
     case 'var_table': return { name: '', subvars: '' }
@@ -167,8 +235,8 @@ export function getDefaultAimdFields(type: string): Record<string, string> {
       id: 'quiz_choice_1',
       quizType: 'choice',
       mode: 'single',
-      stem: 'Which option is correct?',
-      options: 'A:Option A, B:Option B',
+      stem: messages?.defaults.questionStem || DEFAULT_EDITOR_MESSAGES.defaults.questionStem,
+      options: `A:${getDefaultOptionText('A', messages)}, B:${getDefaultOptionText('B', messages)}`,
       answer: 'A',
       blanks: 'b1:21%',
       rubric: '',
@@ -184,7 +252,11 @@ export function getDefaultAimdFields(type: string): Record<string, string> {
   }
 }
 
-export function buildAimdSyntax(type: string, fields: Record<string, string>): string {
+export function buildAimdSyntax(
+  type: string,
+  fields: Record<string, string>,
+  messages?: Pick<AimdEditorMessages, 'defaults'>,
+): string {
   switch (type) {
     case 'var': {
       let inner = fields.name || 'my_var'
@@ -218,13 +290,13 @@ export function buildAimdSyntax(type: string, fields: Record<string, string>): s
       }
 
       lines.push('stem: |')
-      for (const stemLine of toStemLines(fields.stem, 'Please fill this question stem.')) {
+      for (const stemLine of toStemLines(fields.stem, messages?.defaults.fillQuestionStem || DEFAULT_EDITOR_MESSAGES.defaults.fillQuestionStem)) {
         lines.push(`  ${stemLine}`)
       }
 
       if (quizType === 'choice') {
         const mode = fields.mode === 'multiple' ? 'multiple' : 'single'
-        const options = parseQuizOptions(fields.options || '')
+        const options = parseQuizOptions(fields.options || '', messages)
         lines.push(`mode: ${mode}`)
         lines.push('options:')
         for (const option of options) {
@@ -281,7 +353,10 @@ export function buildAimdSyntax(type: string, fields: Record<string, string>): s
   }
 }
 
-export function getQuickAimdSyntax(type: string): string {
+export function getQuickAimdSyntax(
+  type: string,
+  messages?: Pick<AimdEditorMessages, 'defaults'>,
+): string {
   const defaults: Record<string, string> = {
     var: '{{var|var_id: str}}',
     var_table: '{{var_table|table_id, subvars=[col1, col2, col3]}}',
@@ -291,12 +366,12 @@ export function getQuickAimdSyntax(type: string): string {
       'type: choice',
       'mode: single',
       'stem: |',
-      '  Which option is correct?',
+      `  ${messages?.defaults.questionStem || DEFAULT_EDITOR_MESSAGES.defaults.questionStem}`,
       'options:',
       '  - key: A',
-      '    text: Option A',
+      `    text: ${getDefaultOptionText('A', messages)}`,
       '  - key: B',
-      '    text: Option B',
+      `    text: ${getDefaultOptionText('B', messages)}`,
       'answer: A',
       '```',
     ].join('\n'),

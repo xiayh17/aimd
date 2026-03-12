@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import type { AimdEditorMessages } from './locales'
 import {
-  AIMD_FIELD_TYPES,
+  createAimdFieldTypes,
   getDefaultAimdFields,
   buildAimdSyntax,
   type AimdFieldType,
@@ -10,6 +11,7 @@ import {
 const props = defineProps<{
   visible: boolean
   initialType?: string
+  messages: AimdEditorMessages
   refSuggestions?: string[]
 }>()
 
@@ -19,7 +21,7 @@ const emit = defineEmits<{
 }>()
 
 const dialogType = ref(props.initialType || 'var')
-const fields = ref<Record<string, string>>(getDefaultAimdFields(dialogType.value))
+const fields = ref<Record<string, string>>(getDefaultAimdFields(dialogType.value, props.messages))
 
 interface ChoiceOptionItem {
   key: string
@@ -37,13 +39,14 @@ const quizMultipleAnswers = ref<string[]>([])
 const draggingChoiceIndex = ref<number | null>(null)
 const dragOverChoiceIndex = ref<number | null>(null)
 const formError = ref('')
+const localizedFieldTypes = computed(() => createAimdFieldTypes(props.messages))
 
 function parseChoiceOptions(input: string): ChoiceOptionItem[] {
   const parts = input.split(',').map(s => s.trim()).filter(Boolean)
   if (parts.length === 0) {
     return [
-      { key: 'A', text: 'Option A' },
-      { key: 'B', text: 'Option B' },
+      { key: 'A', text: props.messages.defaults.optionText('A') },
+      { key: 'B', text: props.messages.defaults.optionText('B') },
     ]
   }
 
@@ -51,7 +54,7 @@ function parseChoiceOptions(input: string): ChoiceOptionItem[] {
     const sepIndex = part.indexOf(':')
     if (sepIndex > 0) {
       const key = part.slice(0, sepIndex).trim() || String.fromCharCode(65 + index)
-      const text = part.slice(sepIndex + 1).trim() || `Option ${key}`
+      const text = part.slice(sepIndex + 1).trim() || props.messages.defaults.optionText(key)
       return { key, text }
     }
     const key = String.fromCharCode(65 + index)
@@ -65,7 +68,7 @@ function serializeChoiceOptions(items: ChoiceOptionItem[]): string {
     .filter(item => item.key && item.text)
 
   if (normalized.length === 0) {
-    return 'A:Option A, B:Option B'
+    return `A:${props.messages.defaults.optionText('A')}, B:${props.messages.defaults.optionText('B')}`
   }
 
   return normalized.map(item => `${item.key}:${item.text}`).join(', ')
@@ -160,7 +163,7 @@ function nextChoiceKey(): string {
 
 function addChoiceOption() {
   const key = nextChoiceKey()
-  quizChoiceOptions.value.push({ key, text: `Option ${key}` })
+  quizChoiceOptions.value.push({ key, text: props.messages.defaults.optionText(key) })
 }
 
 function removeChoiceOption(index: number) {
@@ -245,35 +248,35 @@ function validateBlankQuizBeforeInsert(): string | null {
     .map(item => item.key.trim())
     .filter(Boolean)
   if (blankKeys.length === 0) {
-    return 'Blank quiz requires at least one non-empty blank key.'
+    return props.messages.errors.blankQuizRequiresBlankKey
   }
 
   const duplicateBlankKeys = collectDuplicateValues(blankKeys)
   if (duplicateBlankKeys.length > 0) {
-    return `Blank keys must be unique: ${duplicateBlankKeys.join(', ')}`
+    return props.messages.errors.blankKeysMustBeUnique(duplicateBlankKeys)
   }
 
   const stem = fields.value.stem || ''
   const placeholderKeys = extractBlankPlaceholders(stem)
   if (placeholderKeys.length === 0) {
-    return 'Blank quiz stem must contain placeholders like [[b1]].'
+    return props.messages.errors.blankStemRequiresPlaceholders
   }
 
   const duplicatePlaceholders = collectDuplicateValues(placeholderKeys)
   if (duplicatePlaceholders.length > 0) {
-    return `Stem contains duplicate placeholders: ${duplicatePlaceholders.join(', ')}`
+    return props.messages.errors.duplicatePlaceholders(duplicatePlaceholders)
   }
 
   const blankKeySet = new Set(blankKeys)
   const placeholderSet = new Set(placeholderKeys)
   const unknownPlaceholders = [...placeholderSet].filter(key => !blankKeySet.has(key))
   if (unknownPlaceholders.length > 0) {
-    return `Stem contains undefined placeholders: ${unknownPlaceholders.join(', ')}`
+    return props.messages.errors.undefinedPlaceholders(unknownPlaceholders)
   }
 
   const missingPlaceholders = [...blankKeySet].filter(key => !placeholderSet.has(key))
   if (missingPlaceholders.length > 0) {
-    return `Stem is missing placeholders for blank keys: ${missingPlaceholders.join(', ')}`
+    return props.messages.errors.missingPlaceholders(missingPlaceholders)
   }
 
   return null
@@ -288,7 +291,7 @@ function validateBeforeInsert(): string | null {
 watch(() => props.initialType, (t) => {
   if (t) {
     dialogType.value = t
-    fields.value = getDefaultAimdFields(t)
+    fields.value = getDefaultAimdFields(t, props.messages)
     hydrateQuizDraftsFromFields()
     formError.value = ''
   }
@@ -296,7 +299,7 @@ watch(() => props.initialType, (t) => {
 
 watch(() => props.visible, (v) => {
   if (v) {
-    fields.value = getDefaultAimdFields(dialogType.value)
+    fields.value = getDefaultAimdFields(dialogType.value, props.messages)
     hydrateQuizDraftsFromFields()
     formError.value = ''
   }
@@ -304,15 +307,15 @@ watch(() => props.visible, (v) => {
 
 function switchType(type: string) {
   dialogType.value = type
-  fields.value = getDefaultAimdFields(type)
+  fields.value = getDefaultAimdFields(type, props.messages)
   hydrateQuizDraftsFromFields()
   formError.value = ''
 }
 
-const preview = computed(() => buildAimdSyntax(dialogType.value, fields.value))
+const preview = computed(() => buildAimdSyntax(dialogType.value, fields.value, props.messages))
 
 function getTypeInfo(type: string): AimdFieldType {
-  return AIMD_FIELD_TYPES.find(f => f.type === type) || { type, label: type, icon: '?', svgIcon: '', desc: '', color: '#666' }
+  return localizedFieldTypes.value.find(f => f.type === type) || { type, label: type, icon: '?', svgIcon: '', desc: '', color: '#666' }
 }
 
 const currentType = computed(() => getTypeInfo(dialogType.value))
@@ -320,6 +323,18 @@ const currentType = computed(() => getTypeInfo(dialogType.value))
 const suggestions = computed(() => {
   if (!props.refSuggestions) return []
   return props.refSuggestions
+})
+
+const referencedLabel = computed(() => {
+  if (dialogType.value === 'ref_step') return props.messages.dialog.referencedStepId
+  if (dialogType.value === 'ref_var') return props.messages.dialog.referencedVariableId
+  return props.messages.dialog.referencedFigureId
+})
+
+const referencedPlaceholder = computed(() => {
+  if (dialogType.value === 'ref_step') return 'step_id'
+  if (dialogType.value === 'ref_var') return 'var_id'
+  return 'fig_id'
 })
 
 watch(() => [dialogType.value, fields.value.quizType], ([type, quizType], [prevType, prevQuizType]) => {
@@ -372,7 +387,7 @@ function doInsert() {
   }
 
   formError.value = ''
-  emit('insert', buildAimdSyntax(dialogType.value, fields.value))
+  emit('insert', buildAimdSyntax(dialogType.value, fields.value, props.messages))
   emit('update:visible', false)
 }
 
@@ -388,7 +403,7 @@ function close() {
         <div class="aimd-dialog-header">
           <span class="aimd-dialog-title">
             <span class="aimd-dialog-icon" :style="{ color: currentType.color }" v-html="currentType.svgIcon" />
-            Insert AIMD {{ currentType.label }}
+            {{ props.messages.dialog.title(currentType.label) }}
           </span>
           <button class="aimd-dialog-close" @click="close">&times;</button>
         </div>
@@ -396,7 +411,7 @@ function close() {
         <!-- Type selector tabs -->
         <div class="aimd-dialog-type-tabs">
           <button
-            v-for="ft in AIMD_FIELD_TYPES"
+            v-for="ft in localizedFieldTypes"
             :key="ft.type"
             :class="['aimd-type-tab', { active: dialogType === ft.type }]"
             :style="dialogType === ft.type ? { borderColor: ft.color, color: ft.color, background: `${ft.color}14` } : {}"
@@ -410,13 +425,13 @@ function close() {
           <!-- var fields -->
           <template v-if="dialogType === 'var'">
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Variable ID <em>*</em></span>
-              <input v-model="fields.name" placeholder="sample_id" class="aimd-field-input" />
+              <span class="aimd-field-label">{{ props.messages.dialog.variableId }} <em>*</em></span>
+              <input v-model="fields.name" :placeholder="props.messages.placeholders.variableId" class="aimd-field-input" />
             </label>
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Type</span>
+              <span class="aimd-field-label">{{ props.messages.dialog.type }}</span>
               <select v-model="fields.type" class="aimd-field-input">
-                <option value="">None</option>
+                <option value="">{{ props.messages.common.none }}</option>
                 <option value="str">str</option>
                 <option value="int">int</option>
                 <option value="float">float</option>
@@ -426,40 +441,40 @@ function close() {
               </select>
             </label>
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Default Value</span>
-              <input v-model="fields.default" placeholder="Optional" class="aimd-field-input" />
+              <span class="aimd-field-label">{{ props.messages.dialog.defaultValue }}</span>
+              <input v-model="fields.default" :placeholder="props.messages.placeholders.defaultValue" class="aimd-field-input" />
             </label>
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Title</span>
-              <input v-model="fields.title" placeholder="Display title (optional)" class="aimd-field-input" />
+              <span class="aimd-field-label">{{ props.messages.dialog.titleLabel }}</span>
+              <input v-model="fields.title" :placeholder="props.messages.placeholders.title" class="aimd-field-input" />
             </label>
           </template>
 
           <!-- var_table fields -->
           <template v-if="dialogType === 'var_table'">
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Table ID <em>*</em></span>
-              <input v-model="fields.name" placeholder="table_id" class="aimd-field-input" />
+              <span class="aimd-field-label">{{ props.messages.dialog.tableId }} <em>*</em></span>
+              <input v-model="fields.name" :placeholder="props.messages.placeholders.tableId" class="aimd-field-input" />
             </label>
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Sub-variable Columns</span>
-              <input v-model="fields.subvars" placeholder="col1, col2, col3" class="aimd-field-input" />
-              <span class="aimd-field-hint">Comma-separated column names</span>
+              <span class="aimd-field-label">{{ props.messages.dialog.subVariableColumns }}</span>
+              <input v-model="fields.subvars" :placeholder="props.messages.placeholders.subVariableColumns" class="aimd-field-input" />
+              <span class="aimd-field-hint">{{ props.messages.dialog.subVariableColumnsHint }}</span>
             </label>
           </template>
 
           <!-- step fields -->
           <template v-if="dialogType === 'step'">
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Step ID <em>*</em></span>
-              <input v-model="fields.name" placeholder="step_id" class="aimd-field-input" />
+              <span class="aimd-field-label">{{ props.messages.dialog.stepId }} <em>*</em></span>
+              <input v-model="fields.name" :placeholder="props.messages.placeholders.stepId" class="aimd-field-input" />
             </label>
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Level</span>
+              <span class="aimd-field-label">{{ props.messages.dialog.level }}</span>
               <select v-model="fields.level" class="aimd-field-input">
-                <option value="1">1 (Top level)</option>
-                <option value="2">2 (Sub-step)</option>
-                <option value="3">3 (Sub-sub-step)</option>
+                <option value="1">{{ props.messages.dialog.level1 }}</option>
+                <option value="2">{{ props.messages.dialog.level2 }}</option>
+                <option value="3">{{ props.messages.dialog.level3 }}</option>
               </select>
             </label>
           </template>
@@ -467,43 +482,43 @@ function close() {
           <!-- quiz fields -->
           <template v-if="dialogType === 'quiz'">
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Quiz ID <em>*</em></span>
-              <input v-model="fields.id" placeholder="quiz_choice_1" class="aimd-field-input" />
+              <span class="aimd-field-label">{{ props.messages.dialog.quizId }} <em>*</em></span>
+              <input v-model="fields.id" :placeholder="props.messages.placeholders.quizId" class="aimd-field-input" />
             </label>
 
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Question Type</span>
+              <span class="aimd-field-label">{{ props.messages.dialog.questionType }}</span>
               <select v-model="fields.quizType" class="aimd-field-input">
-                <option value="choice">choice</option>
-                <option value="blank">blank</option>
-                <option value="open">open</option>
+                <option value="choice">{{ props.messages.quiz.types.choice }}</option>
+                <option value="blank">{{ props.messages.quiz.types.blank }}</option>
+                <option value="open">{{ props.messages.quiz.types.open }}</option>
               </select>
             </label>
 
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Score</span>
-              <input v-model="fields.score" placeholder="Optional, e.g. 5" class="aimd-field-input" />
+              <span class="aimd-field-label">{{ props.messages.dialog.score }}</span>
+              <input v-model="fields.score" :placeholder="props.messages.placeholders.score" class="aimd-field-input" />
             </label>
 
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Stem <em>*</em></span>
-              <textarea v-model="fields.stem" placeholder="Question stem" class="aimd-field-input aimd-field-textarea" />
+              <span class="aimd-field-label">{{ props.messages.dialog.stem }} <em>*</em></span>
+              <textarea v-model="fields.stem" :placeholder="props.messages.placeholders.stem" class="aimd-field-input aimd-field-textarea" />
               <span v-if="fields.quizType === 'blank'" class="aimd-field-hint">
-                Use placeholders in stem like [[b1]], [[b2]] and keep keys consistent with the blanks list.
+                {{ props.messages.dialog.blankStemHint }}
               </span>
             </label>
 
             <template v-if="fields.quizType === 'choice'">
               <label class="aimd-field-row">
-                <span class="aimd-field-label">Mode</span>
+                <span class="aimd-field-label">{{ props.messages.dialog.mode }}</span>
                 <select v-model="fields.mode" class="aimd-field-input">
-                  <option value="single">single</option>
-                  <option value="multiple">multiple</option>
+                  <option value="single">{{ props.messages.quiz.modes.single }}</option>
+                  <option value="multiple">{{ props.messages.quiz.modes.multiple }}</option>
                 </select>
               </label>
 
               <div class="aimd-field-row">
-                <span class="aimd-field-label">Options</span>
+                <span class="aimd-field-label">{{ props.messages.dialog.options }}</span>
                 <div class="aimd-collection-editor">
                   <div
                     v-for="(option, index) in quizChoiceOptions"
@@ -515,7 +530,7 @@ function close() {
                   >
                     <span
                       class="aimd-drag-handle"
-                      title="Drag to reorder"
+                      :title="props.messages.dialog.dragToReorder"
                       draggable="true"
                       @dragstart="startChoiceDrag(index)"
                       @dragend="endChoiceDrag"
@@ -538,55 +553,55 @@ function close() {
                         :value="option.key.trim()"
                         :disabled="!option.key.trim()"
                       />
-                      <span>{{ fields.mode === 'single' ? 'Answer' : 'Correct' }}</span>
+                      <span>{{ fields.mode === 'single' ? props.messages.dialog.answer : props.messages.dialog.correct }}</span>
                     </label>
-                    <input v-model="option.key" placeholder="A" class="aimd-field-input" />
-                    <input v-model="option.text" placeholder="Option text" class="aimd-field-input" />
+                    <input v-model="option.key" :placeholder="props.messages.placeholders.optionKey" class="aimd-field-input" />
+                    <input v-model="option.text" :placeholder="props.messages.placeholders.optionText" class="aimd-field-input" />
                     <button
                       type="button"
                       class="aimd-mini-btn"
                       :disabled="quizChoiceOptions.length <= 1"
                       @click="removeChoiceOption(index)"
                     >
-                      Remove
+                      {{ props.messages.common.remove }}
                     </button>
                   </div>
                   <button type="button" class="aimd-mini-btn aimd-mini-btn-add" @click="addChoiceOption">
-                    + Add option
+                    {{ props.messages.actions.addOption }}
                   </button>
                 </div>
-                <span class="aimd-field-hint">Use unique keys (A/B/C), then mark answer directly in each row.</span>
+                <span class="aimd-field-hint">{{ props.messages.dialog.optionsHint }}</span>
               </div>
             </template>
 
             <template v-else-if="fields.quizType === 'blank'">
               <div class="aimd-field-row">
-                <span class="aimd-field-label">Blanks</span>
+                <span class="aimd-field-label">{{ props.messages.dialog.blanks }}</span>
                 <div class="aimd-collection-editor">
                   <div v-for="(blank, index) in quizBlankItems" :key="`blank-item-${index}`" class="aimd-collection-row">
-                    <input v-model="blank.key" placeholder="b1" class="aimd-field-input" />
-                    <input v-model="blank.answer" placeholder="Expected answer" class="aimd-field-input" />
+                    <input v-model="blank.key" :placeholder="props.messages.placeholders.blankKey" class="aimd-field-input" />
+                    <input v-model="blank.answer" :placeholder="props.messages.placeholders.blankAnswer" class="aimd-field-input" />
                     <button
                       type="button"
                       class="aimd-mini-btn"
                       :disabled="quizBlankItems.length <= 1"
                       @click="removeBlankItem(index)"
                     >
-                      Remove
+                      {{ props.messages.common.remove }}
                     </button>
                   </div>
                   <button type="button" class="aimd-mini-btn aimd-mini-btn-add" @click="addBlankItem">
-                    + Add blank
+                    {{ props.messages.actions.addBlank }}
                   </button>
                 </div>
-                <span class="aimd-field-hint">Use keys like b1, b2 and refer to them in stem as [[b1]], [[b2]].</span>
+                <span class="aimd-field-hint">{{ props.messages.dialog.blanksHint }}</span>
               </div>
             </template>
 
             <template v-else>
               <label class="aimd-field-row">
-                <span class="aimd-field-label">Rubric</span>
-                <textarea v-model="fields.rubric" placeholder="Optional rubric" class="aimd-field-input aimd-field-textarea" />
+                <span class="aimd-field-label">{{ props.messages.dialog.rubric }}</span>
+                <textarea v-model="fields.rubric" :placeholder="props.messages.placeholders.rubric" class="aimd-field-input aimd-field-textarea" />
               </label>
             </template>
           </template>
@@ -594,8 +609,8 @@ function close() {
           <!-- check fields -->
           <template v-if="dialogType === 'check'">
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Checkpoint ID <em>*</em></span>
-              <input v-model="fields.name" placeholder="check_id" class="aimd-field-input" />
+              <span class="aimd-field-label">{{ props.messages.dialog.checkpointId }} <em>*</em></span>
+              <input v-model="fields.name" :placeholder="props.messages.placeholders.checkpointId" class="aimd-field-input" />
             </label>
           </template>
 
@@ -603,18 +618,12 @@ function close() {
           <template v-if="['ref_step', 'ref_var', 'ref_fig'].includes(dialogType)">
             <label class="aimd-field-row">
               <span class="aimd-field-label">
-                {{
-                  dialogType === 'ref_step'
-                    ? 'Referenced Step ID'
-                    : dialogType === 'ref_var'
-                      ? 'Referenced Variable ID'
-                      : 'Referenced Figure ID'
-                }}
+                {{ referencedLabel }}
                 <em>*</em>
               </span>
               <input
                 v-model="fields.name"
-                :placeholder="dialogType === 'ref_step' ? 'step_id' : dialogType === 'ref_var' ? 'var_id' : 'fig_id'"
+                :placeholder="referencedPlaceholder"
                 class="aimd-field-input"
                 list="aimd-ref-suggestions"
               />
@@ -622,7 +631,7 @@ function close() {
                 <option v-for="s in suggestions" :key="s" :value="s" />
               </datalist>
               <span v-if="suggestions.length" class="aimd-field-hint">
-                Available: {{ suggestions.join(', ') }}
+                {{ props.messages.common.available }}: {{ suggestions.join(', ') }}
               </span>
             </label>
           </template>
@@ -630,15 +639,15 @@ function close() {
           <!-- cite -->
           <template v-if="dialogType === 'cite'">
             <label class="aimd-field-row">
-              <span class="aimd-field-label">Citation ID <em>*</em></span>
-              <input v-model="fields.refs" placeholder="ref1, ref2" class="aimd-field-input" />
-              <span class="aimd-field-hint">Comma-separated citation IDs</span>
+              <span class="aimd-field-label">{{ props.messages.dialog.citationId }} <em>*</em></span>
+              <input v-model="fields.refs" :placeholder="props.messages.placeholders.citationIds" class="aimd-field-input" />
+              <span class="aimd-field-hint">{{ props.messages.dialog.citationHint }}</span>
             </label>
           </template>
 
           <!-- Preview -->
           <div class="aimd-dialog-preview">
-            <div class="aimd-preview-header">Preview</div>
+            <div class="aimd-preview-header">{{ props.messages.common.preview }}</div>
             <pre class="aimd-preview-panel"><code class="aimd-preview-code">{{ preview }}</code></pre>
           </div>
 
@@ -648,8 +657,8 @@ function close() {
         </div>
 
         <div class="aimd-dialog-footer">
-          <button class="aimd-btn aimd-btn-cancel" @click="close">Cancel</button>
-          <button class="aimd-btn aimd-btn-primary" @click="doInsert">Insert</button>
+          <button class="aimd-btn aimd-btn-cancel" @click="close">{{ props.messages.common.cancel }}</button>
+          <button class="aimd-btn aimd-btn-primary" @click="doInsert">{{ props.messages.common.insert }}</button>
         </div>
       </div>
     </div>

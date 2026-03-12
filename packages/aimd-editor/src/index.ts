@@ -1,19 +1,10 @@
+/// <reference path="./vue/env.d.ts" />
+
 /**
  * @airalogy/aimd-editor
  *
- * AIMD Monaco editor integration
- *
- * This package provides language config and themes for AIMD.
+ * Root entry that re-exports Monaco integration and Vue editor APIs.
  */
 
-export { language, conf, completionItemProvider } from "./language-config"
-export { aimdTokenColors, aimdTheme, createAimdExtendedTheme } from "./theme"
-export {
-  AimdToken,
-  AimdTokenDefinition,
-  AimdSuffix,
-  DelimiterDefinition,
-  KeywordDefinition,
-  MarkupDefinition,
-  scopeName,
-} from "./tokens"
+export * from './monaco'
+export * from './vue/index'

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { AimdEditor } from '@airalogy/aimd-editor/vue'
+import { AimdEditor } from '@airalogy/aimd-editor'
 import { SAMPLE_AIMD } from '../composables/sampleContent'
 
 const content = ref(SAMPLE_AIMD)

@@ -28,9 +28,10 @@ import '@milkdown/kit/prose/tables/style/tables.css'
 // Internal
 import { aimdMilkdownPlugins } from './milkdown-aimd-plugin'
 import AimdFieldDialog from './AimdFieldDialog.vue'
+import { createAimdEditorMessages } from './locales'
 import {
-  AIMD_FIELD_TYPES,
-  MD_TOOLBAR_ITEMS,
+  createAimdFieldTypes,
+  createMdToolbarItems,
   getQuickAimdSyntax,
   type AimdEditorProps,
 } from './types'
@@ -43,6 +44,7 @@ const modeSvgIcons = {
 
 const props = withDefaults(defineProps<AimdEditorProps>(), {
   modelValue: '',
+  messages: () => ({}),
   mode: 'source',
   theme: 'aimd-light',
   showTopBar: true,
@@ -73,6 +75,7 @@ const content = ref(props.modelValue)
 const showAimdDialog = ref(false)
 const aimdDialogType = ref('var')
 const milkdownEditorRef = shallowRef<Editor | null>(null)
+const resolvedMessages = computed(() => createAimdEditorMessages(props.locale, props.messages))
 
 let isSyncing = false
 
@@ -116,6 +119,10 @@ const refSuggestions = computed(() => {
   return []
 })
 
+const localizedFieldTypes = computed(() => createAimdFieldTypes(resolvedMessages.value))
+
+const localizedMdToolbarItems = computed(() => createMdToolbarItems(resolvedMessages.value))
+
 // --- Monaco Editor ---
 onMounted(async () => {
   try {
@@ -130,6 +137,7 @@ onMounted(async () => {
 })
 
 function registerAimdLanguage(monaco: any) {
+  const messages = resolvedMessages.value
   // Check if already registered
   const langs = monaco.languages.getLanguages()
   if (langs.some((l: any) => l.id === 'aimd')) return
@@ -232,10 +240,10 @@ function registerAimdLanguage(monaco: any) {
         kind: monaco.languages.CompletionItemKind.Snippet,
         insertText: `{{${keyword}|\${1:${placeholderByKeyword[keyword] ?? 'id'}}}}`,
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-        documentation: `Insert AIMD ${keyword} field`,
+        documentation: messages.completions.insertAimdField(keyword),
       }))
       suggestions.push({
-        label: 'quiz block',
+        label: messages.completions.quizBlockLabel,
         kind: monaco.languages.CompletionItemKind.Snippet,
         insertText: [
           '```quiz',
@@ -243,17 +251,17 @@ function registerAimdLanguage(monaco: any) {
           'type: choice',
           'mode: single',
           'stem: |',
-          '  ${2:Which option is correct?}',
+          `  \${2:${messages.defaults.questionStem}}`,
           'options:',
           '  - key: A',
-          '    text: Option A',
+          `    text: ${messages.defaults.optionText('A')}`,
           '  - key: B',
-          '    text: Option B',
+          `    text: ${messages.defaults.optionText('B')}`,
           'answer: A',
           '```',
         ].join('\n'),
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-        documentation: 'Insert AIMD quiz code block',
+        documentation: messages.completions.quizBlock,
       } as any)
       return { suggestions } as any
     },
@@ -438,27 +446,31 @@ function insertLine(prefix: string, placeholder: string = '') {
 }
 
 function handleMdAction(action: string) {
+  const snippets = resolvedMessages.value.snippets
   switch (action) {
-    case 'h1': insertLine('# ', 'Heading'); break
-    case 'h2': insertLine('## ', 'Heading'); break
-    case 'h3': insertLine('### ', 'Heading'); break
-    case 'bold': insertAtCursor('**', '**', 'bold text'); break
-    case 'italic': insertAtCursor('*', '*', 'italic text'); break
-    case 'strikethrough': insertAtCursor('~~', '~~', 'strikethrough'); break
-    case 'ul': insertLine('- ', 'list item'); break
-    case 'ol': insertLine('1. ', 'list item'); break
-    case 'blockquote': insertLine('> ', 'quote'); break
-    case 'code': insertAtCursor('`', '`', 'code'); break
-    case 'codeblock': insertAtCursor('```\n', '\n```', 'code block'); break
-    case 'link': insertAtCursor('[', '](url)', 'link text'); break
-    case 'image': insertAtCursor('![', '](url)', 'alt text'); break
+    case 'h1': insertLine('# ', snippets.heading); break
+    case 'h2': insertLine('## ', snippets.heading); break
+    case 'h3': insertLine('### ', snippets.heading); break
+    case 'bold': insertAtCursor('**', '**', snippets.boldText); break
+    case 'italic': insertAtCursor('*', '*', snippets.italicText); break
+    case 'strikethrough': insertAtCursor('~~', '~~', snippets.strikethrough); break
+    case 'ul': insertLine('- ', snippets.listItem); break
+    case 'ol': insertLine('1. ', snippets.listItem); break
+    case 'blockquote': insertLine('> ', snippets.quote); break
+    case 'code': insertAtCursor('`', '`', snippets.code); break
+    case 'codeblock': insertAtCursor('```\n', '\n```', snippets.codeBlock); break
+    case 'link': insertAtCursor('[', '](url)', snippets.linkText); break
+    case 'image': insertAtCursor('![', '](url)', snippets.altText); break
     case 'hr': insertLine('---'); break
-    case 'math': insertAtCursor('$', '$', 'E = mc^2'); break
+    case 'math': insertAtCursor('$', '$', snippets.mathFormula); break
     case 'table':
       if (editorMode.value === 'wysiwyg' && milkdownEditorRef.value) {
         try { milkdownEditorRef.value.action(callCommand(insertTableCommand.key, { row: 3, col: 3 })) } catch {}
       } else {
-        insertLine('| Col A | Col B | Col C |\n|-------|-------|-------|\n| ', ' |  |  |')
+        insertLine(
+          `| ${snippets.tableColumnA} | ${snippets.tableColumnB} | ${snippets.tableColumnC} |\n|-------|-------|-------|\n| `,
+          ' |  |  |',
+        )
       }
       break
   }
@@ -471,7 +483,7 @@ function openAimdDialog(type: string) {
 }
 
 function quickInsertAimd(type: string) {
-  insertTextIntoActiveEditor(getQuickAimdSyntax(type))
+  insertTextIntoActiveEditor(getQuickAimdSyntax(type, resolvedMessages.value))
 }
 
 function onDialogInsert(syntax: string) {
@@ -497,12 +509,12 @@ interface BlockMenuGroup {
 // Block menu SVG icon helper (14x14)
 const _bsi = (d: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
 
-const BLOCK_MENU_GROUPS: BlockMenuGroup[] = [
+const blockMenuGroups = computed<BlockMenuGroup[]>(() => [
   {
-    label: 'Text',
+    label: resolvedMessages.value.blockMenu.groups.text,
     items: [
       {
-        label: 'Text', icon: 'T',
+        label: resolvedMessages.value.blockMenu.items.text, icon: 'T',
         onRun: (ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
@@ -510,7 +522,7 @@ const BLOCK_MENU_GROUPS: BlockMenuGroup[] = [
         },
       },
       {
-        label: 'Heading 1', icon: 'H1',
+        label: resolvedMessages.value.blockMenu.items.heading1, icon: 'H1',
         onRun: (ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
@@ -518,7 +530,7 @@ const BLOCK_MENU_GROUPS: BlockMenuGroup[] = [
         },
       },
       {
-        label: 'Heading 2', icon: 'H2',
+        label: resolvedMessages.value.blockMenu.items.heading2, icon: 'H2',
         onRun: (ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
@@ -526,7 +538,7 @@ const BLOCK_MENU_GROUPS: BlockMenuGroup[] = [
         },
       },
       {
-        label: 'Heading 3', icon: 'H3',
+        label: resolvedMessages.value.blockMenu.items.heading3, icon: 'H3',
         onRun: (ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
@@ -534,7 +546,8 @@ const BLOCK_MENU_GROUPS: BlockMenuGroup[] = [
         },
       },
       {
-        label: 'Quote', icon: _bsi('<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>'),
+        label: resolvedMessages.value.blockMenu.items.quote,
+        icon: _bsi('<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>'),
         onRun: (ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
@@ -542,7 +555,8 @@ const BLOCK_MENU_GROUPS: BlockMenuGroup[] = [
         },
       },
       {
-        label: 'Divider', icon: _bsi('<line x1="2" y1="12" x2="22" y2="12" stroke-width="2.5"/>'),
+        label: resolvedMessages.value.blockMenu.items.divider,
+        icon: _bsi('<line x1="2" y1="12" x2="22" y2="12" stroke-width="2.5"/>'),
         onRun: (ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
@@ -552,10 +566,11 @@ const BLOCK_MENU_GROUPS: BlockMenuGroup[] = [
     ],
   },
   {
-    label: 'List',
+    label: resolvedMessages.value.blockMenu.groups.list,
     items: [
       {
-        label: 'Bullet List', icon: _bsi('<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="18" r="1" fill="currentColor"/>'),
+        label: resolvedMessages.value.blockMenu.items.bulletList,
+        icon: _bsi('<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="18" r="1" fill="currentColor"/>'),
         onRun: (ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
@@ -563,7 +578,8 @@ const BLOCK_MENU_GROUPS: BlockMenuGroup[] = [
         },
       },
       {
-        label: 'Ordered List', icon: _bsi('<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="3" y="7.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">1</text><text x="3" y="13.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">2</text><text x="3" y="19.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">3</text>'),
+        label: resolvedMessages.value.blockMenu.items.orderedList,
+        icon: _bsi('<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="3" y="7.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">1</text><text x="3" y="13.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">2</text><text x="3" y="19.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">3</text>'),
         onRun: (ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
@@ -573,10 +589,11 @@ const BLOCK_MENU_GROUPS: BlockMenuGroup[] = [
     ],
   },
   {
-    label: 'Advanced',
+    label: resolvedMessages.value.blockMenu.groups.advanced,
     items: [
       {
-        label: 'Code Block', icon: _bsi('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
+        label: resolvedMessages.value.blockMenu.items.codeBlock,
+        icon: _bsi('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
         onRun: (ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
@@ -584,28 +601,27 @@ const BLOCK_MENU_GROUPS: BlockMenuGroup[] = [
         },
       },
       {
-        label: 'Table', icon: _bsi('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>'),
+        label: resolvedMessages.value.blockMenu.items.table,
+        icon: _bsi('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>'),
         onRun: (ctx) => {
           const commands = ctx.get(commandsCtx)
-          const view = ctx.get(editorViewCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
-          const { from } = view.state.selection
           commands.call(addBlockTypeCommand.key, { nodeType: createTable(ctx, 3, 3) })
         },
       },
     ],
   },
   {
-    label: 'AIMD',
-    items: AIMD_FIELD_TYPES.map((ft) => ({
-      label: ft.label, icon: ft.svgIcon,
+    label: resolvedMessages.value.blockMenu.groups.aimd,
+    items: localizedFieldTypes.value.map(ft => ({
+      label: ft.label,
+      icon: ft.svgIcon,
       onRun: (_ctx: any) => {
-        // Open AIMD field dialog (same behavior as toolbar buttons)
         openAimdDialog(ft.type)
       },
     })),
   },
-]
+])
 
 function onBlockMenuClick(item: BlockMenuItem) {
   showBlockMenu.value = false
@@ -661,7 +677,7 @@ const placeholderPlugin = $prose(() => {
         const before = $pos.before()
         const deco = Decoration.node(before, before + node.nodeSize, {
           class: 'aimd-placeholder',
-          'data-placeholder': 'Please enter...',
+          'data-placeholder': resolvedMessages.value.blockMenu.placeholder,
         })
         return DecorationSet.create(state.doc, [deco])
       },
@@ -759,7 +775,7 @@ const MilkdownEditorInner = defineComponent({
 
                   const btn = document.createElement('div')
                   btn.className = 'aimd-block-handle-btn'
-                  btn.title = 'Click to add block'
+                  btn.title = resolvedMessages.value.blockMenu.addBlockTitle
                   btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`
 
                   btn.addEventListener('mousedown', (e) => {
@@ -866,18 +882,18 @@ defineExpose({
         <button
           :class="['aimd-editor-mode-btn', { active: editorMode === 'source' }]"
           @click="switchMode('source')"
-          title="Source Mode"
+          :title="resolvedMessages.mode.sourceTitle"
         >
           <span class="aimd-editor-mode-icon" v-html="modeSvgIcons.source" />
-          <span>Source</span>
+          <span>{{ resolvedMessages.mode.source }}</span>
         </button>
         <button
           :class="['aimd-editor-mode-btn', { active: editorMode === 'wysiwyg' }]"
           @click="switchMode('wysiwyg')"
-          title="WYSIWYG Mode"
+          :title="resolvedMessages.mode.wysiwygTitle"
         >
           <span class="aimd-editor-mode-icon" v-html="modeSvgIcons.wysiwyg" />
-          <span>WYSIWYG</span>
+          <span>{{ resolvedMessages.mode.wysiwyg }}</span>
         </button>
       </div>
 
@@ -885,7 +901,7 @@ defineExpose({
 
       <!-- Markdown buttons -->
       <template v-if="showMdToolbar">
-        <template v-for="item in MD_TOOLBAR_ITEMS" :key="item.action">
+        <template v-for="item in localizedMdToolbarItems" :key="item.action">
           <div v-if="item.action.startsWith('sep')" class="aimd-editor-toolbar-sep" />
           <button
             v-else
@@ -902,7 +918,7 @@ defineExpose({
       <!-- AIMD buttons -->
       <template v-if="showAimdToolbar">
         <button
-          v-for="ft in AIMD_FIELD_TYPES"
+          v-for="ft in localizedFieldTypes"
           :key="ft.type"
           class="aimd-editor-fmt-btn aimd-editor-aimd-btn"
           :title="ft.desc"
@@ -920,7 +936,7 @@ defineExpose({
     <div class="aimd-editor-panel" :style="{ minHeight: minHeight + 'px' }">
       <!-- Source mode: Monaco -->
       <div v-show="editorMode === 'source'" class="aimd-editor-source-mode" :style="{ height: minHeight + 'px' }">
-        <div v-if="monacoLoading" class="aimd-editor-loading">Loading Editor...</div>
+        <div v-if="monacoLoading" class="aimd-editor-loading">{{ resolvedMessages.common.loadingEditor }}</div>
         <div ref="editorContainer" class="aimd-editor-container" />
       </div>
 
@@ -940,7 +956,7 @@ defineExpose({
     <!-- Block add menu (teleported to body for correct positioning) -->
     <Teleport to="body">
       <div v-if="showBlockMenu" class="aimd-block-add-menu" :style="{ top: blockMenuPos.y + 'px', left: blockMenuPos.x + 'px' }">
-        <template v-for="(group, gi) in BLOCK_MENU_GROUPS" :key="group.label">
+        <template v-for="(group, gi) in blockMenuGroups" :key="group.label">
           <div v-if="gi > 0" class="aimd-block-add-menu-divider" />
           <div class="aimd-block-add-menu-group-label">{{ group.label }}</div>
           <button
@@ -960,6 +976,7 @@ defineExpose({
     <AimdFieldDialog
       :visible="showAimdDialog"
       :initial-type="aimdDialogType"
+      :messages="resolvedMessages"
       :ref-suggestions="refSuggestions"
       @update:visible="showAimdDialog = $event"
       @insert="onDialogInsert"

@@ -1,18 +1,34 @@
 export { default as AimdEditor } from './AimdEditor.vue'
 export { default as AimdFieldDialog } from './AimdFieldDialog.vue'
 export {
+  createAimdEditorMessages,
+  DEFAULT_AIMD_EDITOR_LOCALE,
+  resolveAimdEditorLocale,
+} from './locales'
+export {
+  AIMD_FIELD_TYPE_DEFINITIONS,
   AIMD_FIELD_TYPES,
+  MD_TOOLBAR_ITEM_DEFINITIONS,
   MD_TOOLBAR_ITEMS,
+  createAimdFieldTypes,
+  createMdToolbarItems,
   getDefaultAimdFields,
   buildAimdSyntax,
   getQuickAimdSyntax,
 } from './types'
 export type {
+  AimdFieldTypeDefinition,
   AimdFieldType,
+  MdToolbarItemDefinition,
   MdToolbarItem,
   AimdEditorProps,
   AimdEditorEmits,
 } from './types'
+export type {
+  AimdEditorLocale,
+  AimdEditorMessages,
+  AimdEditorMessagesInput,
+} from './locales'
 export {
   aimdMilkdownPlugins,
   aimdRemarkPlugin,

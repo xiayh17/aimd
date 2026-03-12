@@ -8,6 +8,7 @@ export default defineConfig({
     lib: {
       entry: {
         index: resolve(__dirname, 'src/index.ts'),
+        monaco: resolve(__dirname, 'src/monaco.ts'),
         vue: resolve(__dirname, 'src/vue/index.ts'),
       },
       formats: ['es'],

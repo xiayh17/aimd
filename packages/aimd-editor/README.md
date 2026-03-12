@@ -12,13 +12,27 @@ pnpm add @airalogy/aimd-editor monaco-editor
 
 ```ts
 import * as monaco from "monaco-editor"
-import { language, conf, completionItemProvider } from "@airalogy/aimd-editor"
+import { language, conf, completionItemProvider } from "@airalogy/aimd-editor/monaco"
 
 monaco.languages.register({ id: "aimd" })
 monaco.languages.setMonarchTokensProvider("aimd", language)
 monaco.languages.setLanguageConfiguration("aimd", conf)
 monaco.languages.registerCompletionItemProvider("aimd", completionItemProvider)
 ```
+
+## Vue Editor i18n
+
+```vue
+<script setup lang="ts">
+import { AimdEditor } from "@airalogy/aimd-editor"
+</script>
+
+<template>
+  <AimdEditor locale="zh-CN" />
+</template>
+```
+
+Use `messages` to override built-in copy per locale.
 
 ## Documentation
 

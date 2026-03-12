@@ -4,6 +4,20 @@
 
 - `packages/*` are publishable AIMD packages (`@airalogy/aimd-*`).
 
+## Documentation Layout
+
+- Package READMEs live in `packages/<package-name>/README.md` and `packages/<package-name>/README.zh-CN.md`.
+- Docs site source lives in `docs/`.
+- English package docs live in `docs/en/packages/<package-name>.md`.
+- Chinese package docs live in `docs/zh/packages/<package-name>.md`.
+- Docs site config lives in `docs/.vitepress/config.mjs`.
+
+## Documentation Expectations For AI Agents
+
+- When changing public package API, user-facing behavior, onboarding flow, or examples, update the relevant package README and matching docs pages under `docs/en/` and `docs/zh/`.
+- Keep English and Chinese docs aligned in scope unless the user explicitly asks otherwise.
+- Keep package README concise and onboarding-focused; put fuller explanations and API usage in `docs/`.
+
 ## Versioning Policy For AI Agents
 
 - When a change affects a package's **published behavior**, update that package version in its `package.json`.
