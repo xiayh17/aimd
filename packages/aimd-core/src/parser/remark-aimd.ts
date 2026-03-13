@@ -13,9 +13,16 @@ import type {
 } from "../types/nodes"
 import type { ExtractedAimdFields } from "../types/aimd"
 import {
+  extractPythonAssignerGraphNodes,
+  validateAssignerGraph,
+  type AimdAssignerGraphNode,
+} from "./assigner-graph"
+import {
   createStepContext,
   isVarTable,
+  parseClientAssignerContent,
   parseCheckContent,
+  parseFenceMeta,
   parseFigContent,
   parseStepContent,
   parseTableColumns,
@@ -248,6 +255,7 @@ const remarkAimd: Plugin<[RemarkAimdOptions?], Root> = (options = {}) => {
     const fields: ExtractedAimdFields = {
       var: [],
       var_table: [],
+      client_assigner: [],
       quiz: [],
       step: [],
       check: [],
@@ -259,6 +267,7 @@ const remarkAimd: Plugin<[RemarkAimdOptions?], Root> = (options = {}) => {
     }
 
     const stepContext = createStepContext()
+    const graphAssigners: AimdAssignerGraphNode[] = []
 
     visit(tree, (node: any) => {
       if (
@@ -275,6 +284,19 @@ const remarkAimd: Plugin<[RemarkAimdOptions?], Root> = (options = {}) => {
         return
 
       const lang = (node.lang || "").trim().toLowerCase()
+      const meta = parseFenceMeta(node.meta)
+
+      if (lang === "assigner" && meta.runtime === "client") {
+        const assigner = parseClientAssignerContent(node.value)
+        fields.client_assigner.push(assigner)
+        graphAssigners.push(assigner)
+        parent.children.splice(index, 1)
+        return [SKIP, index] as const
+      }
+
+      if (lang === "assigner") {
+        graphAssigners.push(...extractPythonAssignerGraphNodes(node.value))
+      }
 
       if (lang === "fig") {
         try {
@@ -442,6 +464,7 @@ const remarkAimd: Plugin<[RemarkAimdOptions?], Root> = (options = {}) => {
     }
 
     if (extractFields) {
+      validateAssignerGraph(graphAssigners)
       file.data.aimdFields = fields
     }
 

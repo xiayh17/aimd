@@ -4,6 +4,15 @@ All notable changes to `@airalogy/aimd-core` will be documented in this file.
 
 Earlier historical releases were not backfilled yet. This changelog currently starts from the `2.x` release line.
 
+## [2.1.0] - 2026-03-13
+
+### Added
+
+- Added extraction for fenced `assigner runtime=client` blocks, including structured `client_assigner[]` metadata with `id`, `mode`, `dependent_fields`, `assigned_fields`, and `function_source`.
+- Added frontend-side assigner graph validation so duplicate assigned fields and cross-runtime cycles are rejected during AIMD parsing.
+- Exported client assigner types and parser validation helpers for downstream packages that need to execute or inspect client assigners.
+- Added `acorn` as a direct dependency in preparation for parser hardening around client assigner JavaScript syntax.
+
 ## [2.0.1] - 2026-03-12
 
 ### Added

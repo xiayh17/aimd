@@ -2,6 +2,8 @@
 
 `@airalogy/aimd-recorder` 提供 AIMD 记录场景的样式与 Vue 录入组件。
 
+> 协议级 AIMD 语法、assigner 语义与校验规则以 Airalogy 文档为准；本页只描述 `@airalogy/aimd-recorder` 如何在前端渲染录入控件并执行本地 recorder 行为。
+
 ## 安装
 
 ```bash
@@ -16,6 +18,7 @@ pnpm add @airalogy/aimd-recorder @airalogy/aimd-core
 - 提供可复用题目控件 `AimdQuizRecorder`（单独使用 quiz 输入时可复用）。
 - 内置变量控件支持 `CurrentTime`、`UserName`、`AiralogyMarkdown`。
 - 在 recorder/edit 模式下，`ref_var` 如果已经有记录值，会优先以只读内联内容显示该值。
+- 前端受限的 `assigner runtime=client` 代码块会在 recorder 中本地执行，用于纯 `var` 计算。
 
 ## 协议内联录入示例（推荐）
 
@@ -58,6 +61,36 @@ const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
   "check": {},
   "quiz": {}
 }
+```
+
+client assigner 示例：
+
+````aimd
+Water: {{var|water_volume_ml: float}}
+Lemon: {{var|lemon_juice_ml: float}}
+Total: {{var|total_liquid_ml: float}}
+
+```assigner runtime=client
+assigner(
+  {
+    mode: "auto",
+    dependent_fields: ["water_volume_ml", "lemon_juice_ml"],
+    assigned_fields: ["total_liquid_ml"],
+  },
+  function calculate_total_liquid_ml({ water_volume_ml, lemon_juice_ml }) {
+    return {
+      total_liquid_ml: Math.round((water_volume_ml + lemon_juice_ml) * 100) / 100,
+    };
+  }
+);
+```
+````
+
+如果使用 `mode: "manual"`，`AimdRecorder` 会通过组件 ref 暴露显式触发方法：
+
+```ts
+recorderRef.value?.runClientAssigner("calculate_total_liquid_ml")
+recorderRef.value?.runManualClientAssigners()
 ```
 
 ## 语言

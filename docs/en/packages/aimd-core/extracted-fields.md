@@ -18,6 +18,7 @@ These scopes are still simple `string[]`, and each string is an identifier:
 
 - `var_table[]` exposes canonical `id`
 - `var_table[].subvars[]` exposes canonical `id`
+- `client_assigner[]` exposes `id`, `mode`, `dependent_fields`, `assigned_fields`, and `function_source` extracted from `assigner(config, function ...)` client blocks
 - `quiz[]` already exposes `id`
 - `stepHierarchy[]` exposes `id`, `step`, `parentId`, `prevId`, `nextId`
 
@@ -33,6 +34,16 @@ These scopes are still simple `string[]`, and each string is an identifier:
         { "id": "sample_id" },
         { "id": "concentration" }
       ]
+    }
+  ],
+  "client_assigner": [
+    {
+      "id": "calculate_total",
+      "runtime": "client",
+      "mode": "auto",
+      "dependent_fields": ["a", "b"],
+      "assigned_fields": ["total"],
+      "function_source": "function calculate_total({ a, b }) { return { total: a + b }; }"
     }
   ],
   "stepHierarchy": [

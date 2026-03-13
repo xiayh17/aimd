@@ -2,6 +2,13 @@
 
 All notable changes to `@airalogy/aimd-editor` will be documented in this file.
 
+## [1.2.3] - 2026-03-13
+
+### Fixed
+
+- Fixed Monaco source-mode highlighting for fenced `quiz` blocks so ````quiz` content now embeds YAML tokenization instead of falling back to plain AIMD/markdown styling.
+- Fixed Monaco source-mode highlighting for fenced `assigner` blocks so `assigner runtime=client` now embeds JavaScript tokenization and default `assigner` blocks embed Python tokenization instead of falling back to plain AIMD/markdown styling.
+
 ## [1.2.1] - 2026-03-12
 
 ### Fixed

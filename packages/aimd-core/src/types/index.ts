@@ -4,6 +4,8 @@
 
 export type {
   AimdCheckField,
+  AimdClientAssignerField,
+  AimdClientAssignerMode,
   AimdFieldType,
   AimdQuizBlank,
   AimdQuizField,

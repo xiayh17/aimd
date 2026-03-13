@@ -21,6 +21,8 @@
 ## Versioning Policy For AI Agents
 
 - When a change affects a package's **published behavior**, update that package version in its `package.json`.
+- When a publishable package version is bumped, update that package's `CHANGELOG.md` in the same change.
+- Keep the changelog entry scoped to the package itself; do not describe unrelated workspace changes in another package's changelog.
 - Use SemVer:
   - `major`: breaking API/behavior changes.
   - `minor`: backward-compatible feature additions.
@@ -45,3 +47,4 @@
 - If unsure whether a change is externally visible, prefer:
   - Ask for confirmation, or
   - Do at least a `patch` bump.
+- If you do bump a package version, treat updating that package changelog as required release metadata, not optional follow-up work.

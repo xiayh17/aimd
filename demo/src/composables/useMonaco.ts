@@ -11,6 +11,12 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 let monacoInstance: typeof Monaco | null = null
 let initPromise: Promise<typeof Monaco> | null = null
 
+const CLIENT_ASSIGNER_FENCE = /^\s*(```|~~~)\s*assigner(?:\s+.*\bruntime\s*=\s*(?:"client"|'client'|client)\b.*)\s*$/
+const SERVER_ASSIGNER_FENCE = /^\s*(```|~~~)\s*assigner(?:\s+.*)?\s*$/
+const QUIZ_FENCE = /^\s*(```|~~~)\s*quiz(?:\s+.*)?\s*$/
+const GENERIC_CODE_FENCE = /^\s*(```|~~~)\s*((?:\w|[/#-])+)(?:\s+.*)?\s*$/
+const EMPTY_CODE_FENCE = /^\s*(```|~~~)\s*$/
+
 function setupWorkers() {
   // @ts-expect-error MonacoEnvironment
   globalThis.MonacoEnvironment = {
@@ -69,8 +75,11 @@ function registerAimdLanguage(monaco: typeof Monaco) {
       root: [
         [/\{\{/, { token: 'delimiter.bracket.aimd', next: '@aimdField' }],
         [/^#{1,6}\s.*$/, 'keyword.md'],
-        [/^```\w*$/, { token: 'string.code', next: '@codeblock' }],
-        [/^~~~\w*$/, { token: 'string.code', next: '@codeblock' }],
+        [QUIZ_FENCE, { token: 'string.code', next: '@embeddedCodeblock', nextEmbedded: 'yaml' }],
+        [CLIENT_ASSIGNER_FENCE, { token: 'string.code', next: '@embeddedCodeblock', nextEmbedded: 'javascript' }],
+        [SERVER_ASSIGNER_FENCE, { token: 'string.code', next: '@embeddedCodeblock', nextEmbedded: 'python' }],
+        [GENERIC_CODE_FENCE, { token: 'string.code', next: '@embeddedCodeblock', nextEmbedded: '$2' }],
+        [EMPTY_CODE_FENCE, { token: 'string.code', next: '@codeblock' }],
         [/`[^`]+`/, 'string.code'],
         [/\*\*[^*]+\*\*/, 'strong'],
         [/__[^_]+__/, 'strong'],
@@ -106,6 +115,11 @@ function registerAimdLanguage(monaco: typeof Monaco) {
         [/^```\s*$/, { token: 'string.code', next: '@pop' }],
         [/^~~~\s*$/, { token: 'string.code', next: '@pop' }],
         [/.*$/, 'string.code'],
+      ],
+      embeddedCodeblock: [
+        [/^```\s*$/, { token: 'string.code', next: '@pop', nextEmbedded: '@pop' }],
+        [/^~~~\s*$/, { token: 'string.code', next: '@pop', nextEmbedded: '@pop' }],
+        [/.*$/, ''],
       ],
     },
   } as any)

@@ -2,6 +2,10 @@
 
 Rendering engine for AIMD: HTML output, Vue output, and field extraction.
 
+Assigner blocks are hidden from normal rendered output by default. You can opt into collapsed or expanded assigner display when building authoring/debug views, while extracted field metadata remains available through `parseAndExtract`.
+
+> Protocol-level AIMD syntax, assigner semantics, and validation rules are normative in Airalogy docs. `@airalogy/aimd-*` docs describe how the frontend parser, renderer, and recorder implement those rules.
+
 ## Install
 
 ```bash
@@ -20,6 +24,18 @@ const fields = parseAndExtract(content)
 console.log(html)
 console.log(fields)
 ```
+
+## Assigner Visibility
+
+```ts
+import { renderToHtml } from "@airalogy/aimd-renderer"
+
+const { html } = await renderToHtml(content, {
+  assignerVisibility: "collapsed", // "hidden" | "collapsed" | "expanded"
+})
+```
+
+`assignerVisibility` defaults to `"hidden"`.
 
 ## Localization
 

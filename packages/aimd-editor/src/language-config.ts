@@ -21,10 +21,33 @@ export const language: languagesNS.IMonarchLanguage = {
   tokenizer: {
     ...markdownLanguage.tokenizer!,
     root: [
+      [/^\s*(```|~~~)\s*quiz(?:\s+.*)?\s*$/, {
+        token: "string",
+        next: "@quizCodeblock",
+        nextEmbedded: "yaml",
+      }],
+      [/^\s*(```|~~~)\s*assigner(?:\s+.*\bruntime\s*=\s*(?:"client"|'client'|client)\b.*)\s*$/, {
+        token: "string",
+        next: "@assignerCodeblock",
+        nextEmbedded: "javascript",
+      }],
+      [/^\s*(```|~~~)\s*assigner(?:\s+.*)?\s*$/, {
+        token: "string",
+        next: "@assignerCodeblock",
+        nextEmbedded: "python",
+      }],
       ...markdownLanguage.tokenizer.root,
       { include: "@aimd" },
     ],
     table_body: [...markdownLanguage.tokenizer.table_body, { include: "@aimd" }],
+    assignerCodeblock: [
+      [/^\s*(```|~~~)\s*$/, { token: "string", next: "@pop", nextEmbedded: "@pop" }],
+      [/.*$/, ""],
+    ],
+    quizCodeblock: [
+      [/^\s*(```|~~~)\s*$/, { token: "string", next: "@pop", nextEmbedded: "@pop" }],
+      [/.*$/, ""],
+    ],
     aimd: [
       // 1. AIMD Protocol Fields: {{keyword|content}}
       // This rule finds the opening '{{' and switches to the 'protocol' state

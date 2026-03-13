@@ -15,7 +15,7 @@ import type { AimdNode, QuizPreviewOptions, RenderContext } from "@airalogy/aimd
 import type { ExtractedAimdFields } from "@airalogy/aimd-core/types"
 import type { AimdRendererI18nOptions, AimdRendererMessages } from "../locales"
 import type { AimdComponentRenderer, ElementRenderer, ShikiHighlighter, VueRendererOptions } from "../vue/vue-renderer"
-import type { RenderResult } from "./processor"
+import type { AimdRendererOptions, RenderResult } from "./processor"
 import { h } from "vue"
 import {
   createAimdRendererMessages,
@@ -113,6 +113,10 @@ export interface UnifiedTokenRendererOptions {
    * Optional overrides for built-in renderer copy
    */
   messages?: AimdRendererI18nOptions["messages"]
+  /**
+   * Assigner block visibility policy in rendered output.
+   */
+  assignerVisibility?: AimdRendererOptions["assignerVisibility"]
 }
 
 /**
@@ -730,6 +734,7 @@ export function createUnifiedTokenRenderer(options: UnifiedTokenRendererOptions)
         gfm: true,
         math: true,
         breaks: true,
+        assignerVisibility: options.assignerVisibility,
         ...vueOptions,
       })
     },

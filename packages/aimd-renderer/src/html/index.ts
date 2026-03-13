@@ -16,7 +16,7 @@ export {
 } from '../locales'
 
 export type { ProcessorOptions } from '@airalogy/aimd-core/types'
-export type { AimdRendererOptions, RenderResult } from '../common/processor'
+export type { AimdAssignerVisibility, AimdRendererOptions, RenderResult } from '../common/processor'
 export type {
   AimdRendererI18nOptions,
   AimdRendererLocale,

@@ -18,6 +18,7 @@
 
 - `var_table[]` 提供规范字段 `id`
 - `var_table[].subvars[]` 提供规范字段 `id`
+- `client_assigner[]` 提供 `id`、`mode`、`dependent_fields`、`assigned_fields`、`function_source`，它们来自 `assigner(config, function ...)` 形式的前端代码块
 - `quiz[]` 本来就使用 `id`
 - `stepHierarchy[]` 提供 `id`、`step`、`parentId`、`prevId`、`nextId`
 
@@ -33,6 +34,16 @@
         { "id": "sample_id" },
         { "id": "concentration" }
       ]
+    }
+  ],
+  "client_assigner": [
+    {
+      "id": "calculate_total",
+      "runtime": "client",
+      "mode": "auto",
+      "dependent_fields": ["a", "b"],
+      "assigned_fields": ["total"],
+      "function_source": "function calculate_total({ a, b }) { return { total: a + b }; }"
     }
   ],
   "stepHierarchy": [

@@ -2,6 +2,8 @@
 
 `@airalogy/aimd-core` 提供 AIMD 的语法解析与规范化字段提取能力。
 
+> 协议级 AIMD 语法、assigner 语义与校验规则以 Airalogy 文档为准；本页只描述 `@airalogy/aimd-core` 如何在前端解析并提取这些结构。
+
 ## 安装
 
 ```bash
@@ -11,6 +13,7 @@ pnpm add @airalogy/aimd-core
 ## 核心能力
 
 - 解析 AIMD 模板语法与 `quiz` / `fig` 代码块。
+- 解析 fenced `assigner runtime=client` 代码块并提取前端 assigner 元数据。
 - 构建兼容 MDAST 的 AIMD 节点。
 - 输出标准化字段结构，供 renderer/editor/recorder 复用。
 
@@ -29,6 +32,25 @@ processor.runSync(tree, file)
 
 console.log(file.data.aimdFields)
 ```
+
+client assigner 仍然使用同一个 `assigner` fenced block 名，只是在头部声明 runtime：
+
+````aimd
+```assigner runtime=client
+assigner(
+  {
+    mode: "auto",
+    dependent_fields: ["a", "b"],
+    assigned_fields: ["total"],
+  },
+  function calculate_total({ a, b }) {
+    return {
+      total: a + b,
+    };
+  }
+);
+```
+````
 
 ## Markdown 表格
 

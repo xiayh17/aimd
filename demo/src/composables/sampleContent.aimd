@@ -1,4 +1,4 @@
-# Research Protocol Example
+# Airalogy Protocol Example
 
 ## Variable Definitions
 
@@ -26,8 +26,24 @@ Is active: {{var|is_active: bool = true}}
 | --- | --- |
 | Water | {{var|water_volume_ml: float}} mL |
 | Lemon juice | {{var|lemon_juice_ml: float}} mL |
+| Total liquid | {{var|total_liquid_ml: float}} mL |
 | Sugar | {{var|sugar_weight_g: float}} g |
 | Ice cubes | {{var|ice_cube_count: int}} |
+
+```assigner runtime=client
+assigner(
+  {
+    mode: "auto",
+    dependent_fields: ["water_volume_ml", "lemon_juice_ml"],
+    assigned_fields: ["total_liquid_ml"],
+  },
+  function calculate_total_liquid_ml({ water_volume_ml, lemon_juice_ml }) {
+    return {
+      total_liquid_ml: Math.round((water_volume_ml + lemon_juice_ml) * 100) / 100,
+    };
+  }
+);
+```
 
 ## Experiment Steps
 

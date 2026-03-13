@@ -41,6 +41,10 @@ export interface AimdRendererMessages {
     reference: (value: string | number) => string
     captionTitle: (sequence: number, title?: string) => string
   }
+  assigner: {
+    clientSummary: string
+    serverSummary: string
+  }
 }
 
 export type AimdRendererMessagesInput = DeepPartial<AimdRendererMessages>
@@ -96,6 +100,10 @@ const EN_US_MESSAGES: AimdRendererMessages = {
     reference: value => `figure ${value}`,
     captionTitle: (sequence, title) => title ? `figure ${sequence}: ${title}` : `figure ${sequence}`,
   },
+  assigner: {
+    clientSummary: "Client assigner",
+    serverSummary: "Server assigner",
+  },
 }
 
 const ZH_CN_MESSAGES: AimdRendererMessages = {
@@ -126,6 +134,10 @@ const ZH_CN_MESSAGES: AimdRendererMessages = {
   figure: {
     reference: value => `图 ${value}`,
     captionTitle: (sequence, title) => title ? `图 ${sequence}：${title}` : `图 ${sequence}`,
+  },
+  assigner: {
+    clientSummary: "前端 assigner",
+    serverSummary: "服务端 assigner",
   },
 }
 

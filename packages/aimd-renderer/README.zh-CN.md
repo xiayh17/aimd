@@ -2,6 +2,10 @@
 
 AIMD 渲染引擎：支持 HTML 渲染、Vue 渲染与字段提取。
 
+默认情况下，assigner 代码块不会出现在普通渲染输出中。只有在作者视图或调试视图中显式开启时，才会以折叠或展开形式显示；`parseAndExtract` 仍会保留相关字段元数据。
+
+> 协议级 AIMD 语法、assigner 语义与校验规则以 Airalogy 文档为准；`@airalogy/aimd-*` 文档只描述前端 parser、renderer、recorder 如何实现这些规范。
+
 ## 安装
 
 ```bash
@@ -20,6 +24,18 @@ const fields = parseAndExtract(content)
 console.log(html)
 console.log(fields)
 ```
+
+## Assigner 可见性
+
+```ts
+import { renderToHtml } from "@airalogy/aimd-renderer"
+
+const { html } = await renderToHtml(content, {
+  assignerVisibility: "collapsed", // "hidden" | "collapsed" | "expanded"
+})
+```
+
+`assignerVisibility` 默认值是 `"hidden"`。
 
 ## 本地化
 

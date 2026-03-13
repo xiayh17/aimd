@@ -1,4 +1,7 @@
+import type { AimdClientAssignerField } from "../types/aimd"
 import type { AimdStepNode, AimdVarDefinition } from "../types/nodes"
+export { validateClientAssigners } from "./assigner-graph"
+import { parseClientAssignerContent as parseClientAssignerContentImpl } from "./client-assigner-syntax"
 
 /**
  * Step context for building hierarchy.
@@ -63,6 +66,43 @@ export function parseKeyValueParams(content: string): Record<string, string | bo
       params[key] = value
     }
     match = kvPattern.exec(content)
+  }
+
+  return params
+}
+
+/**
+ * Parse fenced-code meta into a flat key/value object.
+ * Supports `runtime=client` and quoted values.
+ */
+export function parseFenceMeta(meta: string | null | undefined): Record<string, string | boolean | number> {
+  if (!meta || !meta.trim()) {
+    return {}
+  }
+
+  const params: Record<string, string | boolean | number> = {}
+  const kvPattern = /(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s]+))/g
+  let match: RegExpExecArray | null = kvPattern.exec(meta)
+
+  while (match !== null) {
+    const key = match[1]
+    const rawValue = match[2] ?? match[3] ?? match[4] ?? ""
+    if (rawValue === "true" || rawValue === "True") {
+      params[key] = true
+    }
+    else if (rawValue === "false" || rawValue === "False") {
+      params[key] = false
+    }
+    else if (/^-?\d+$/.test(rawValue)) {
+      params[key] = Number.parseInt(rawValue, 10)
+    }
+    else if (/^-?\d+\.\d+$/.test(rawValue)) {
+      params[key] = Number.parseFloat(rawValue)
+    }
+    else {
+      params[key] = rawValue
+    }
+    match = kvPattern.exec(meta)
   }
 
   return params
@@ -141,6 +181,15 @@ export function parseCheckContent(content: string): {
   }
 
   return { id, checkedMessage, label: id }
+}
+
+/**
+ * Parse a frontend-only assigner stored in a fenced
+ * `assigner runtime=client` block using the canonical
+ * `assigner(config, function ...)` syntax.
+ */
+export function parseClientAssignerContent(content: string): AimdClientAssignerField {
+  return parseClientAssignerContentImpl(content)
 }
 
 /**

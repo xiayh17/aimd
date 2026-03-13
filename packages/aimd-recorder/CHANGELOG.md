@@ -2,6 +2,23 @@
 
 All notable changes to `@airalogy/aimd-recorder` will be documented in this file.
 
+## [1.5.1] - 2026-03-13
+
+### Added
+
+- Added local execution support for fenced `assigner runtime=client` blocks, including `auto`, `auto_first`, and explicit `manual` triggering semantics.
+- Added exposed component methods `runClientAssigner(id)` and `runManualClientAssigners()` on `AimdRecorder` for manual client assigner execution.
+- Added localized recorder copy for quiz answer and rubric labels so open-question metadata stays aligned with renderer output.
+
+### Changed
+
+- Recorder field updates now re-run extracted client assigners and write resulting values back into `record.var` in dependency order.
+
+### Fixed
+
+- Fixed async inline rebuild races in `AimdRecorder` so `auto` client assigners reliably refresh downstream field displays after dependent input changes.
+- Fixed client assigner execution in `AimdRecorder` by removing an invalid strict-mode `eval` shadow from the runtime compiler. `assigner runtime=client` auto assignments such as `Math.round(...)` now execute instead of silently failing with a syntax error.
+
 ## [1.4.4] - 2026-03-12
 
 ### Changed

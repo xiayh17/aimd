@@ -31,6 +31,8 @@ export interface AimdRecorderMessages {
       open: string
     }
     score: (score: string | number) => string
+    answer: (value: string) => string
+    rubric: (value: string) => string
     openPlaceholder: string
   }
   step: {
@@ -95,6 +97,8 @@ const EN_US_MESSAGES: AimdRecorderMessages = {
       open: "open",
     },
     score: score => `${score} pt`,
+    answer: value => `Answer: ${value}`,
+    rubric: value => `Rubric: ${value}`,
     openPlaceholder: "Input your answer...",
   },
   step: {
@@ -132,6 +136,8 @@ const ZH_CN_MESSAGES: AimdRecorderMessages = {
       open: "开放",
     },
     score: score => `${score} 分`,
+    answer: value => `答案：${value}`,
+    rubric: value => `评分标准：${value}`,
     openPlaceholder: "请输入答案...",
   },
   step: {

@@ -59,6 +59,7 @@ const renderError = ref('')
 
 // --- Record Data ---
 const recordData = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
+const recorderRef = ref<{ runManualClientAssigners?: () => boolean } | null>(null)
 
 // Active panel on the right side
 const activeRightTab = ref<'preview' | 'form' | 'data'>('preview')
@@ -66,7 +67,10 @@ const activeRightTab = ref<'preview' | 'form' | 'data'>('preview')
 async function processContent() {
   try {
     renderError.value = ''
-    const result = await renderToHtml(content.value, { locale: locale.value })
+    const result = await renderToHtml(content.value, {
+      locale: locale.value,
+      assignerVisibility: 'collapsed',
+    })
     htmlOutput.value = result.html
 
     const extracted = parseAndExtract(content.value)

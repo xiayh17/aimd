@@ -2,6 +2,16 @@
 
 All notable changes to `@airalogy/aimd-renderer` will be documented in this file.
 
+## [2.1.0] - 2026-03-13
+
+### Changed
+
+- Aligned renderer-side extracted field fallbacks with the new `client_assigner` metadata shape so `parseAndExtract` and render helpers always expose a complete `ExtractedAimdFields` object when client assigners are present.
+- Updated renderer package examples and docs to reflect that `assigner runtime=client` blocks are treated as hidden metadata rather than visible rendered code blocks.
+- Changed renderer defaults so `assigner` code blocks are hidden from normal rendered output, regardless of whether they run on the server or client runtime.
+- Added `assignerVisibility: "hidden" | "collapsed" | "expanded"` to HTML/Vue renderer APIs and unified token renderer options so authoring or debug views can reveal assigner code on demand.
+- Localized visible assigner summaries for built-in English and Chinese renderer copy, shortened the client-facing wording, styled collapsed previews with a lower-contrast presentation, and added built-in JS/Python syntax highlighting when visible assigners are rendered.
+
 ## [2.0.2] - 2026-03-12
 
 ### Changed

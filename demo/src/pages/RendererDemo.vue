@@ -18,10 +18,16 @@ async function render() {
   try {
     renderError.value = ''
 
-    const htmlResult = await renderToHtml(input.value, { locale: locale.value })
+    const htmlResult = await renderToHtml(input.value, {
+      locale: locale.value,
+      assignerVisibility: 'collapsed',
+    })
     htmlOutput.value = htmlResult.html
 
-    const vueResult = await renderToVue(input.value, { locale: locale.value })
+    const vueResult = await renderToVue(input.value, {
+      locale: locale.value,
+      assignerVisibility: 'collapsed',
+    })
     vueNodes.value = vueResult.nodes
 
     const fields = parseAndExtract(input.value)

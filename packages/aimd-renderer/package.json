@@ -1,7 +1,7 @@
 {
   "name": "@airalogy/aimd-renderer",
   "type": "module",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "AIMD rendering engines for HTML and Vue",
   "keywords": [
     "aimd",
@@ -56,6 +56,7 @@
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
+    "shiki": "^2.5.0",
     "unified": "^11.0.5",
     "vfile": "^6.0.3"
   },

@@ -2,6 +2,10 @@
 
 AIMD（Airalogy Markdown）的核心解析器与规范化字段提取能力。
 
+它也会把 fenced `assigner runtime=client` 代码块提取为 `fields.client_assigner` 前端元数据。
+
+> 协议级 AIMD 语法、assigner 语义与校验规则以 Airalogy 文档为准；`@airalogy/aimd-*` 文档只描述前端 parser、renderer、recorder 如何实现这些规范。
+
 ## 安装
 
 ```bash
@@ -23,6 +27,25 @@ processor.runSync(tree, file)
 
 console.log(file.data.aimdFields)
 ```
+
+示例 client assigner：
+
+````aimd
+```assigner runtime=client
+assigner(
+  {
+    mode: "auto",
+    dependent_fields: ["a", "b"],
+    assigned_fields: ["total"],
+  },
+  function calculate_total({ a, b }) {
+    return {
+      total: a + b,
+    };
+  }
+);
+```
+````
 
 如果 AIMD 行内模板出现在 Markdown 表格单元格中，需要在 `parse()` 之前先保护模板，避免 GFM 把模板里的 `|` 当成列表格分隔符：
 

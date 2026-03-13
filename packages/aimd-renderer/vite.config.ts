@@ -26,6 +26,7 @@ export default defineConfig({
         'rehype-raw',
         'rehype-katex',
         'hast-util-to-html',
+        'shiki',
         'vfile',
       ],
     },

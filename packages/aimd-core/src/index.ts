@@ -25,6 +25,8 @@ export { DOM_ATTR_NAME, type DomAttrName } from './parser/constants'
 export type {
   // AIMD unified types (canonical types for AIMD parsing)
   AimdCheckField,
+  AimdClientAssignerField,
+  AimdClientAssignerMode,
   AimdFieldType,
   AimdQuizField,
   AimdRefField,

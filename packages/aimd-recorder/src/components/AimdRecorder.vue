@@ -2,6 +2,7 @@
 import { computed, h, nextTick, reactive, ref, watch, type VNode } from "vue"
 import type {
   AimdCheckNode,
+  AimdClientAssignerField,
   AimdQuizField,
   AimdQuizNode,
   AimdStepNode,
@@ -11,6 +12,7 @@ import type {
   ExtractedAimdFields,
 } from "@airalogy/aimd-core/types"
 import { parseAndExtract, renderToVue } from "@airalogy/aimd-renderer"
+import { applyClientAssigners } from "../client-assigner"
 import type { AimdRecorderMessagesInput } from "../locales"
 import {
   createAimdRecorderMessages,
@@ -49,10 +51,12 @@ const renderError = ref("")
 const contentRoot = ref<HTMLElement | null>(null)
 const localRecord = reactive<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 let buildRequestId = 0
+let inlineBuildRequestId = 0
 let syncingFromExternal = false
 let renderScheduled = false
 let recordInitializedDuringRender = false
 let pendingFocusSnapshot: FocusSnapshot | null = null
+let pendingInlineBuildRequestId: number | null = null
 let draggingVarTableRow: VarTableDragState | null = null
 let dragOverVarTableRowElement: HTMLTableRowElement | null = null
 let draggingVarTableHandleElement: HTMLElement | null = null
@@ -68,6 +72,7 @@ const resolvedMessages = computed(() => createAimdRecorderMessages(resolvedLocal
 const EMPTY_FIELDS: ExtractedAimdFields = {
   var: [],
   var_table: [],
+  client_assigner: [],
   quiz: [],
   step: [],
   check: [],
@@ -96,6 +101,7 @@ interface VarInputDisplayOverride {
 }
 
 const varInputDisplayOverrides = reactive<Record<string, VarInputDisplayOverride>>({})
+const clientAssigners = ref<AimdClientAssignerField[]>([])
 
 function cloneRecordData(value: AimdProtocolRecordData): AimdProtocolRecordData {
   return JSON.parse(JSON.stringify(value))
@@ -233,8 +239,52 @@ function emitRecordUpdate() {
   emit("update:modelValue", cloneRecordData(localRecord))
 }
 
+function runClientAssigners(options?: { triggerIds?: string[] }): boolean {
+  if (props.readonly || clientAssigners.value.length === 0) {
+    return false
+  }
+
+  try {
+    return applyClientAssigners(clientAssigners.value, localRecord.var, options).changed
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    emit("error", `Client assigner error: ${message}`)
+    return false
+  }
+}
+
+function applyCurrentClientAssigners(): boolean {
+  return runClientAssigners()
+}
+
+function triggerClientAssigner(id: string): boolean {
+  const changed = runClientAssigners({ triggerIds: [id] })
+  if (changed) {
+    emitRecordUpdate()
+    scheduleInlineRebuild()
+  }
+  return changed
+}
+
+function triggerManualClientAssigners(ids?: string[]): boolean {
+  const manualIds = ids?.length
+    ? ids
+    : clientAssigners.value.filter(assigner => assigner.mode === "manual").map(assigner => assigner.id)
+  if (manualIds.length === 0) {
+    return false
+  }
+  const changed = runClientAssigners({ triggerIds: manualIds })
+  if (changed) {
+    emitRecordUpdate()
+    scheduleInlineRebuild()
+  }
+  return changed
+}
+
 function scheduleInlineRebuild() {
   pendingFocusSnapshot = captureFocusSnapshot() ?? pendingFocusSnapshot
+  pendingInlineBuildRequestId = ++inlineBuildRequestId
   if (renderScheduled) {
     return
   }
@@ -242,14 +292,17 @@ function scheduleInlineRebuild() {
   Promise.resolve().then(() => {
     renderScheduled = false
     const focusSnapshot = pendingFocusSnapshot
+    const inlineRequestId = pendingInlineBuildRequestId ?? inlineBuildRequestId
     pendingFocusSnapshot = null
-    void rebuildInlineNodes(undefined, focusSnapshot)
+    pendingInlineBuildRequestId = null
+    void rebuildInlineNodes(undefined, focusSnapshot, inlineRequestId)
   })
 }
 
-function markRecordChanged(options?: { rebuild?: boolean }) {
+function markRecordChanged(options?: { rebuild?: boolean, runClientAssigners?: boolean }) {
+  const assignerChanged = options?.runClientAssigners ? applyCurrentClientAssigners() : false
   emitRecordUpdate()
-  if (options?.rebuild) {
+  if (options?.rebuild || assignerChanged) {
     scheduleInlineRebuild()
   }
 }
@@ -940,7 +993,7 @@ function ensureVarTableRows(tableName: string, columns: string[]): Record<string
 function addVarTableRow(tableName: string, columns: string[]) {
   const rows = ensureVarTableRows(tableName, columns)
   rows.push(createEmptyVarTableRow(columns))
-  markRecordChanged({ rebuild: true })
+  markRecordChanged({ rebuild: true, runClientAssigners: true })
 }
 
 function moveVarTableRow(tableName: string, fromIndex: number, toIndex: number, columns: string[]) {
@@ -966,7 +1019,7 @@ function moveVarTableRow(tableName: string, fromIndex: number, toIndex: number, 
     varTableDropAnimationTimer = null
     scheduleInlineRebuild()
   }, 520)
-  markRecordChanged({ rebuild: true })
+  markRecordChanged({ rebuild: true, runClientAssigners: true })
 }
 
 function removeVarTableRow(tableName: string, rowIndex: number, columns: string[]) {
@@ -975,7 +1028,7 @@ function removeVarTableRow(tableName: string, rowIndex: number, columns: string[
     return
   }
   rows.splice(rowIndex, 1)
-  markRecordChanged({ rebuild: true })
+  markRecordChanged({ rebuild: true, runClientAssigners: true })
 }
 
 function getVarTableRowKey(row: Record<string, string>): string {
@@ -1179,7 +1232,7 @@ function renderInlineVar(node: AimdVarNode): VNode {
           onChange: (event: Event) => {
             const target = event.target as HTMLInputElement
             localRecord.var[id] = target.checked
-            markRecordChanged()
+            markRecordChanged({ runClientAssigners: true })
           },
         }),
       ]),
@@ -1201,7 +1254,7 @@ function renderInlineVar(node: AimdVarNode): VNode {
           const target = event.target as HTMLTextAreaElement
           clearVarInputDisplayOverride(id)
           localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
-          markRecordChanged()
+          markRecordChanged({ runClientAssigners: true })
         },
       }),
       "aimd-rec-inline--var-stacked--textarea",
@@ -1233,7 +1286,7 @@ function renderInlineVar(node: AimdVarNode): VNode {
           localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
           applyVarStackWidth(target, inputKind)
           syncAutoWrapTextareaHeight(target)
-          markRecordChanged()
+          markRecordChanged({ runClientAssigners: true })
         },
       }),
     )
@@ -1257,7 +1310,7 @@ function renderInlineVar(node: AimdVarNode): VNode {
         const target = event.target as HTMLInputElement
         clearVarInputDisplayOverride(id)
         localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
-        markRecordChanged()
+        markRecordChanged({ runClientAssigners: true })
       },
     }),
   )
@@ -1313,7 +1366,7 @@ function renderInlineVarTable(node: AimdVarTableNode): VNode {
               value: row[column] ?? "",
               onInput: (event: Event) => {
                 row[column] = (event.target as HTMLInputElement).value
-                markRecordChanged()
+                markRecordChanged({ runClientAssigners: true })
               },
             }),
           ])),
@@ -1450,7 +1503,11 @@ function renderInlineQuiz(node: AimdQuizNode): VNode {
   })
 }
 
-async function rebuildInlineNodes(expectedRequestId?: number, focusSnapshot?: FocusSnapshot | null) {
+async function rebuildInlineNodes(
+  expectedRequestId?: number,
+  focusSnapshot?: FocusSnapshot | null,
+  expectedInlineRequestId?: number,
+) {
   recordInitializedDuringRender = false
   const rendered = await renderToVue(props.content || "", {
     locale: resolvedLocale.value,
@@ -1468,7 +1525,10 @@ async function rebuildInlineNodes(expectedRequestId?: number, focusSnapshot?: Fo
     },
   })
 
-  if (expectedRequestId !== undefined && expectedRequestId !== buildRequestId) {
+  if (
+    (expectedRequestId !== undefined && expectedRequestId !== buildRequestId)
+    || (expectedInlineRequestId !== undefined && expectedInlineRequestId !== inlineBuildRequestId)
+  ) {
     return
   }
 
@@ -1483,6 +1543,7 @@ async function rebuildInlineNodes(expectedRequestId?: number, focusSnapshot?: Fo
 
 async function parseAndBuild() {
   const currentRequestId = ++buildRequestId
+  const currentInlineRequestId = ++inlineBuildRequestId
 
   try {
     renderError.value = ""
@@ -1491,14 +1552,16 @@ async function parseAndBuild() {
       return
     }
 
+    clientAssigners.value = extracted.client_assigner || []
     emit("fields-change", extracted)
 
-    const changed = ensureDefaultsFromFields(extracted)
-    if (changed) {
+    const defaultsChanged = ensureDefaultsFromFields(extracted)
+    const assignerChanged = applyCurrentClientAssigners()
+    if (defaultsChanged || assignerChanged) {
       emitRecordUpdate()
     }
 
-    await rebuildInlineNodes(currentRequestId)
+    await rebuildInlineNodes(currentRequestId, undefined, currentInlineRequestId)
   } catch (error) {
     if (currentRequestId !== buildRequestId) {
       return
@@ -1506,6 +1569,7 @@ async function parseAndBuild() {
     const message = error instanceof Error ? error.message : String(error)
     renderError.value = message
     inlineNodes.value = []
+    clientAssigners.value = []
     emit("fields-change", EMPTY_FIELDS)
     emit("error", message)
   }
@@ -1517,6 +1581,9 @@ watch(
     syncingFromExternal = true
     applyIncomingRecord(value)
     syncingFromExternal = false
+    if (applyCurrentClientAssigners()) {
+      emitRecordUpdate()
+    }
     scheduleInlineRebuild()
   },
   { deep: true, immediate: true },
@@ -1533,6 +1600,11 @@ watch(
   },
   { immediate: true, deep: true },
 )
+
+defineExpose({
+  runClientAssigner: triggerClientAssigner,
+  runManualClientAssigners: triggerManualClientAssigners,
+})
 </script>
 
 <template>

@@ -2,6 +2,10 @@
 
 Core parser and canonical field extraction for AIMD (Airalogy Markdown).
 
+It also extracts frontend-only assigners from fenced `assigner runtime=client` blocks into `fields.client_assigner`.
+
+> Protocol-level AIMD syntax, assigner semantics, and validation rules are normative in Airalogy docs. `@airalogy/aimd-*` docs describe how the frontend parser, renderer, and recorder implement those rules.
+
 ## Install
 
 ```bash
@@ -23,6 +27,25 @@ processor.runSync(tree, file)
 
 console.log(file.data.aimdFields)
 ```
+
+Example client assigner block:
+
+````aimd
+```assigner runtime=client
+assigner(
+  {
+    mode: "auto",
+    dependent_fields: ["a", "b"],
+    assigned_fields: ["total"],
+  },
+  function calculate_total({ a, b }) {
+    return {
+      total: a + b,
+    };
+  }
+);
+```
+````
 
 If AIMD inline templates appear inside Markdown tables, protect them before `parse()` so GFM does not split on the template pipe:
 

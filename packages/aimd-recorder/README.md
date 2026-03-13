@@ -4,6 +4,9 @@ Reusable recording UI for AIMD, including inline protocol recorder, quiz answer 
 
 Built-in variable input types include `CurrentTime`, `UserName`, and `AiralogyMarkdown`.
 In recorder/edit mode, `ref_var` references display current var values as readonly inline content when available.
+Frontend-only `assigner runtime=client` blocks are executed locally for pure var computations.
+
+> Protocol-level AIMD syntax, assigner semantics, and validation rules are normative in Airalogy docs. `@airalogy/aimd-*` docs describe how the frontend parser, renderer, and recorder implement those rules.
 
 ## Install
 
@@ -55,6 +58,36 @@ Use `locale` to switch built-in recorder labels (`en-US` / `zh-CN`).
   "check": {},
   "quiz": {}
 }
+```
+
+Client assigner example:
+
+````aimd
+Water: {{var|water_volume_ml: float}}
+Lemon: {{var|lemon_juice_ml: float}}
+Total: {{var|total_liquid_ml: float}}
+
+```assigner runtime=client
+assigner(
+  {
+    mode: "auto",
+    dependent_fields: ["water_volume_ml", "lemon_juice_ml"],
+    assigned_fields: ["total_liquid_ml"],
+  },
+  function calculate_total_liquid_ml({ water_volume_ml, lemon_juice_ml }) {
+    return {
+      total_liquid_ml: Math.round((water_volume_ml + lemon_juice_ml) * 100) / 100,
+    };
+  }
+);
+```
+````
+
+For `mode: "manual"`, the component exposes explicit trigger methods through the Vue ref:
+
+```ts
+recorderRef.value?.runClientAssigner("calculate_total_liquid_ml")
+recorderRef.value?.runManualClientAssigners()
 ```
 
 ### Quiz Recorder Only

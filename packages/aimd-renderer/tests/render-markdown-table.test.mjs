@@ -62,6 +62,33 @@ const CHOICE_MODE_SAMPLE = [
   '```',
 ].join('\n')
 
+const ASSIGNER_VISIBILITY_SAMPLE = [
+  '{{var|water_volume_ml: float}}',
+  '{{var|lemon_juice_ml: float}}',
+  '{{var|server_total_ml: float}}',
+  '{{var|client_total_ml: float}}',
+  '',
+  '```assigner',
+  'def calculate_server_total_ml(dependent_fields):',
+  '    return {"server_total_ml": dependent_fields["water_volume_ml"] + dependent_fields["lemon_juice_ml"]}',
+  '```',
+  '',
+  '```assigner runtime=client',
+  'assigner(',
+  '  {',
+  '    mode: "auto",',
+  '    dependent_fields: ["water_volume_ml", "lemon_juice_ml"],',
+  '    assigned_fields: ["client_total_ml"],',
+  '  },',
+  '  function calculate_client_total_ml({ water_volume_ml, lemon_juice_ml }) {',
+  '    return {',
+  '      client_total_ml: water_volume_ml + lemon_juice_ml,',
+  '    };',
+  '  }',
+  ');',
+  '```',
+].join('\n')
+
 function isVNodeLike(value) {
   return typeof value === 'object' && value !== null && 'type' in value
 }
@@ -193,4 +220,52 @@ test('renderToHtml distinguishes single and multiple choice labels by locale', a
   assert.match(zhHtml, /\(单选\)/)
   assert.match(zhHtml, /\(多选\)/)
   assert.doesNotMatch(zhHtml, /\(选择\)/)
+})
+
+test('renderToHtml hides assigner blocks by default while preserving client assigner metadata', async () => {
+  const { html, fields } = await renderToHtml(ASSIGNER_VISIBILITY_SAMPLE)
+
+  assert.doesNotMatch(html, /calculate_server_total_ml/)
+  assert.doesNotMatch(html, /calculate_client_total_ml/)
+  assert.equal(fields.client_assigner[0]?.id, 'calculate_client_total_ml')
+})
+
+test('renderToHtml can expand assigner blocks as language-specific code fences', async () => {
+  const { html } = await renderToHtml(ASSIGNER_VISIBILITY_SAMPLE, {
+    assignerVisibility: 'expanded',
+  })
+
+  assert.match(html, /aimd-assigner-preview--expanded/)
+  assert.match(html, /language-python/)
+  assert.match(html, /language-javascript/)
+  assert.match(html, /Server assigner/)
+  assert.match(html, /Client assigner/)
+  assert.match(html, /calculate_server_total_ml/)
+  assert.match(html, /calculate_client_total_ml/)
+  assert.match(html, /style="color:/)
+})
+
+test('renderToHtml can collapse assigner blocks behind localized details summaries', async () => {
+  const { html: enHtml } = await renderToHtml(ASSIGNER_VISIBILITY_SAMPLE, {
+    assignerVisibility: 'collapsed',
+  })
+  const { html: zhHtml } = await renderToHtml(ASSIGNER_VISIBILITY_SAMPLE, {
+    assignerVisibility: 'collapsed',
+    locale: 'zh-CN',
+  })
+
+  assert.match(enHtml, /<details class="aimd-assigner-preview aimd-assigner-preview--collapsed aimd-assigner-preview--server"/)
+  assert.match(enHtml, /Server assigner/)
+  assert.match(enHtml, /Client assigner/)
+  assert.match(enHtml, />PY<\/span>/)
+  assert.match(enHtml, />JS<\/span>/)
+  assert.match(enHtml, /language-python/)
+  assert.match(enHtml, /language-javascript/)
+  assert.match(enHtml, /aimd-assigner-code__line/)
+  assert.match(enHtml, /style="color:/)
+
+  assert.match(zhHtml, /服务端 assigner/)
+  assert.match(zhHtml, /前端 assigner/)
+  assert.match(zhHtml, />PY<\/span>/)
+  assert.match(zhHtml, />JS<\/span>/)
 })

@@ -339,6 +339,30 @@ export interface AimdFigField {
 }
 
 /**
+ * Client runtime assigner modes currently supported by the recorder runtime.
+ */
+export type AimdClientAssignerMode = "auto" | "auto_first" | "manual"
+
+/**
+ * Frontend-only assigner definition extracted from
+ * ```assigner runtime=client``` blocks.
+ */
+export interface AimdClientAssignerField {
+  /** Stable assigner id */
+  id: string
+  /** Runtime discriminator */
+  runtime: "client"
+  /** Trigger policy */
+  mode: AimdClientAssignerMode
+  /** Fields read by this assigner */
+  dependent_fields: string[]
+  /** Fields written by this assigner */
+  assigned_fields: string[]
+  /** Named function source extracted from the block */
+  function_source: string
+}
+
+/**
  * Extracted AIMD fields from markdown
  * This is the canonical output format from remark-aimd
  */
@@ -347,6 +371,8 @@ export interface ExtractedAimdFields {
   var: string[]
   /** Variable tables with full definitions */
   var_table: AimdVarTableField[]
+  /** Frontend-only assigners from fenced `assigner runtime=client` blocks */
+  client_assigner: AimdClientAssignerField[]
   /** Quiz definitions from ```quiz code blocks */
   quiz: AimdQuizField[]
   /** Steps */
