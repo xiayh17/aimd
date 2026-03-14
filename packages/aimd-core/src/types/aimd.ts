@@ -8,29 +8,53 @@
 // ===== Base Types for Compatibility =====
 
 /**
- * Scope field key (for referencing fields)
+ * Scope field key — extended field key including special scopes
  */
-export type ScopeFieldKey = `${AimdScopeKey}:${string}`
+export type ScopeFieldKey = FieldKey | "var_table" | "ref_step" | "rv_ref" | "research_step_ref"
 
 /**
- * Field key type
+ * Field key type — maps to backend scope identifiers
  */
-export type FieldKey = string
+export type FieldKey =
+  | "research_variable"
+  | "research_step"
+  | "research_check"
+  | "research_node"
+  | "research_protocol"
+  | "research_result"
+  | "research_record"
+  | "research_question"
+  | "research_workflow"
+  | "research_step_ref"
 
 /**
- * Field response key
+ * Field response key — keys used in API responses
  */
-export type FieldResponseKey = string
+export type FieldResponseKey = "vars" | "checks" | "steps" | "var_tables"
 
 /**
- * Field name type
+ * Field name type — short names used in AIMD syntax
  */
-export type FiledName = string
+export type FiledName =
+  | "var"
+  | "var_table"
+  | "step"
+  | "check"
+  | "ref_step"
+  | "ref_var"
+  | "rp"
+  | "rr"
+  | "rrec"
+  | "rq"
+  | "rnw"
+  | "rn"
+  | "step_ref"
+  | "rv_ref"
 
 /**
- * Record data key
+ * Record data key — keys used in record data structures
  */
-export type IRecordDataKey = string
+export type IRecordDataKey = ScopeFieldKey | "checks" | "steps" | "vars"
 
 /**
  * Record data item

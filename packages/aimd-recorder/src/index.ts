@@ -1,8 +1,8 @@
 /**
  * @airalogy/aimd-recorder
- * 
+ *
  * AIMD editor Vue components and UI
- * 
+ *
  * This package provides Vue components for editing and displaying AIMD content
  */
 
@@ -20,7 +20,14 @@ export {
   DEFAULT_AIMD_RECORDER_LOCALE,
   resolveAimdRecorderLocale,
 } from './locales'
-export type { AimdProtocolRecordData, AimdStepOrCheckRecordItem } from './types'
+export type {
+  AimdProtocolRecordData,
+  AimdStepOrCheckRecordItem,
+  AimdFieldMeta,
+  AimdFieldState,
+  FieldEventPayload,
+  TableEventPayload,
+} from './types'
 export { createEmptyProtocolRecordData } from './types'
 export type {
   AimdRecorderI18nOptions,
@@ -28,3 +35,4 @@ export type {
   AimdRecorderMessages,
   AimdRecorderMessagesInput,
 } from './locales'
+export * from './composables'

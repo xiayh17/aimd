@@ -1,0 +1,290 @@
+/**
+ * Record-state normalisation and field-default helpers.
+ *
+ * Extracted from AimdRecorder.vue so the logic can be reused
+ * by both the recorder and the host-app rendering pipeline.
+ */
+
+import type { AimdQuizField, AimdVarTableField } from "@airalogy/aimd-core/types"
+import type { AimdProtocolRecordData, AimdStepOrCheckRecordItem } from "../types"
+import { createEmptyProtocolRecordData } from "../types"
+
+// ---------------------------------------------------------------------------
+// Deep clone
+// ---------------------------------------------------------------------------
+
+export function cloneRecordData(value: AimdProtocolRecordData): AimdProtocolRecordData {
+  return JSON.parse(JSON.stringify(value))
+}
+
+// ---------------------------------------------------------------------------
+// Step / check normalisation
+// ---------------------------------------------------------------------------
+
+export function normalizeStepLike(value: unknown): AimdStepOrCheckRecordItem {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { checked: false, annotation: "" }
+  }
+
+  const obj = value as Record<string, unknown>
+  return {
+    checked: Boolean(obj.checked),
+    annotation: typeof obj.annotation === "string" ? obj.annotation : "",
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Incoming record normalisation
+// ---------------------------------------------------------------------------
+
+export function normalizeIncomingRecord(value: Partial<AimdProtocolRecordData> | undefined): AimdProtocolRecordData {
+  const normalized = createEmptyProtocolRecordData()
+  if (!value || typeof value !== "object") {
+    return normalized
+  }
+
+  if (value.var && typeof value.var === "object") {
+    normalized.var = { ...value.var }
+  }
+  if (value.quiz && typeof value.quiz === "object") {
+    normalized.quiz = { ...value.quiz }
+  }
+  if (value.step && typeof value.step === "object") {
+    for (const [key, item] of Object.entries(value.step)) {
+      normalized.step[key] = normalizeStepLike(item)
+    }
+  }
+  if (value.check && typeof value.check === "object") {
+    for (const [key, item] of Object.entries(value.check)) {
+      normalized.check[key] = normalizeStepLike(item)
+    }
+  }
+
+  return normalized
+}
+
+// ---------------------------------------------------------------------------
+// Section replacement (reactive-safe)
+// ---------------------------------------------------------------------------
+
+export function replaceSection(target: Record<string, unknown>, source: Record<string, unknown>) {
+  for (const key of Object.keys(target)) {
+    delete target[key]
+  }
+  Object.assign(target, source)
+}
+
+export function applyNormalizedRecord(localRecord: AimdProtocolRecordData, normalized: AimdProtocolRecordData) {
+  replaceSection(localRecord.var as Record<string, unknown>, normalized.var)
+  replaceSection(localRecord.step as Record<string, unknown>, normalized.step as Record<string, unknown>)
+  replaceSection(localRecord.check as Record<string, unknown>, normalized.check as Record<string, unknown>)
+  replaceSection(localRecord.quiz as Record<string, unknown>, normalized.quiz)
+}
+
+export function applyIncomingRecord(localRecord: AimdProtocolRecordData, value: Partial<AimdProtocolRecordData> | undefined) {
+  applyNormalizedRecord(localRecord, normalizeIncomingRecord(value))
+}
+
+// ---------------------------------------------------------------------------
+// Field normalisation helpers
+// ---------------------------------------------------------------------------
+
+export function normalizeStepFields(raw: unknown): Array<{ name: string }> {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  return raw
+    .map((item) => {
+      if (typeof item === "string" && item.trim()) {
+        return { name: item.trim() }
+      }
+      if (item && typeof item === "object" && typeof (item as any).name === "string") {
+        return { name: (item as any).name as string }
+      }
+      return null
+    })
+    .filter((item): item is { name: string } => item !== null)
+}
+
+export function normalizeCheckFields(raw: unknown): Array<{ name: string, label?: string }> {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  const normalized: Array<{ name: string, label?: string }> = []
+  for (const item of raw) {
+    if (typeof item === "string" && item.trim()) {
+      const label = item.trim()
+      normalized.push({ name: label, label })
+      continue
+    }
+
+    if (item && typeof item === "object") {
+      const obj = item as Record<string, unknown>
+      if (typeof obj.name === "string") {
+        normalized.push({
+          name: obj.name,
+          label: typeof obj.label === "string" ? obj.label : undefined,
+        })
+      }
+    }
+  }
+
+  return normalized
+}
+
+export function normalizeQuizFields(raw: unknown): AimdQuizField[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw.filter((item): item is AimdQuizField => (
+    !!item
+    && typeof item === "object"
+    && typeof (item as any).id === "string"
+    && typeof (item as any).type === "string"
+    && typeof (item as any).stem === "string"
+  ))
+}
+
+export function normalizeVarTableFields(raw: unknown): AimdVarTableField[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw.filter((item): item is AimdVarTableField => (
+    !!item
+    && typeof item === "object"
+    && typeof (item as any).name === "string"
+    && Array.isArray((item as any).subvars)
+  ))
+}
+
+// ---------------------------------------------------------------------------
+// Quiz default values
+// ---------------------------------------------------------------------------
+
+export function getQuizDefaultValue(quiz: AimdQuizField): unknown {
+  if (quiz.type === "choice") {
+    const optionKeys = new Set((quiz.options || []).map(option => option.key))
+    if (quiz.mode === "multiple") {
+      if (Array.isArray(quiz.default)) {
+        return quiz.default.filter((item): item is string => typeof item === "string" && optionKeys.has(item))
+      }
+      return []
+    }
+
+    if (typeof quiz.default === "string" && optionKeys.has(quiz.default)) {
+      return quiz.default
+    }
+    return ""
+  }
+
+  if (quiz.type === "blank") {
+    const blankKeys = (quiz.blanks || []).map(blank => blank.key)
+    if (quiz.default && typeof quiz.default === "object" && !Array.isArray(quiz.default)) {
+      const objDefault = quiz.default as Record<string, unknown>
+      const normalized: Record<string, string> = {}
+      for (const key of blankKeys) {
+        const value = objDefault[key]
+        normalized[key] = typeof value === "string" ? value : ""
+      }
+      return normalized
+    }
+
+    if (typeof quiz.default === "string" && blankKeys.length === 1) {
+      return { [blankKeys[0]]: quiz.default }
+    }
+
+    const blankValueMap: Record<string, string> = {}
+    for (const key of blankKeys) {
+      blankValueMap[key] = ""
+    }
+    return blankValueMap
+  }
+
+  if (typeof quiz.default === "string") {
+    return quiz.default
+  }
+  return ""
+}
+
+// ---------------------------------------------------------------------------
+// Var-table row helpers
+// ---------------------------------------------------------------------------
+
+export function createEmptyVarTableRow(columns: string[]): Record<string, string> {
+  const row: Record<string, string> = {}
+  for (const column of columns) {
+    row[column] = ""
+  }
+  return row
+}
+
+export function normalizeVarTableRows(raw: unknown, columns: string[]): Record<string, string>[] {
+  if (!Array.isArray(raw)) {
+    return [createEmptyVarTableRow(columns)]
+  }
+
+  const rows = raw.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return createEmptyVarTableRow(columns)
+    }
+    const source = item as Record<string, unknown>
+    const row: Record<string, string> = {}
+    for (const column of columns) {
+      const value = source[column]
+      row[column] = typeof value === "string" ? value : `${value ?? ""}`
+    }
+    return row
+  })
+
+  if (rows.length === 0) {
+    rows.push(createEmptyVarTableRow(columns))
+  }
+
+  return rows
+}
+
+// ---------------------------------------------------------------------------
+// Ensure defaults from extracted fields
+// ---------------------------------------------------------------------------
+
+import type { ExtractedAimdFields } from "@airalogy/aimd-core/types"
+
+export function ensureDefaultsFromFields(localRecord: AimdProtocolRecordData, fields: ExtractedAimdFields): boolean {
+  let changed = false
+
+  for (const vt of normalizeVarTableFields(fields.var_table)) {
+    const columns = vt.subvars.map(subvar => subvar.name)
+    const rows = localRecord.var[vt.name]
+    const normalizedRows = normalizeVarTableRows(rows, columns)
+    if (JSON.stringify(normalizedRows) !== JSON.stringify(rows)) {
+      localRecord.var[vt.name] = normalizedRows
+      changed = true
+    }
+  }
+
+  for (const step of normalizeStepFields(fields.step)) {
+    if (!(step.name in localRecord.step)) {
+      localRecord.step[step.name] = { checked: false, annotation: "" }
+      changed = true
+    }
+  }
+
+  for (const check of normalizeCheckFields(fields.check)) {
+    if (!(check.name in localRecord.check)) {
+      localRecord.check[check.name] = { checked: false, annotation: "" }
+      changed = true
+    }
+  }
+
+  for (const quiz of normalizeQuizFields(fields.quiz)) {
+    if (!(quiz.id in localRecord.quiz)) {
+      localRecord.quiz[quiz.id] = getQuizDefaultValue(quiz)
+      changed = true
+    }
+  }
+
+  return changed
+}

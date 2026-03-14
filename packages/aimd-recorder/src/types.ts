@@ -18,3 +18,40 @@ export function createEmptyProtocolRecordData(): AimdProtocolRecordData {
     quiz: {},
   }
 }
+
+// ---------------------------------------------------------------------------
+// Extension types — used by host apps to customise AimdRecorder behaviour
+// ---------------------------------------------------------------------------
+
+/** Field metadata — app passes via prop to describe extra field info */
+export interface AimdFieldMeta {
+  inputType?: string           // override input type: 'file' | 'enum' | 'number' | 'markdown'
+  required?: boolean
+  pattern?: string             // regex validation
+  enumOptions?: Array<{ label: string; value: unknown }>
+  disabled?: boolean
+  placeholder?: string
+  assigner?: { mode: 'manual' | 'auto_first' | 'auto_force' }
+}
+
+/** Field runtime state — app updates dynamically via prop */
+export interface AimdFieldState {
+  loading?: boolean            // assigner loading
+  error?: string               // assigner error
+  validationError?: string     // validation error message
+  disabled?: boolean           // dynamic disable
+}
+
+/** Field event payload */
+export interface FieldEventPayload {
+  section: 'var' | 'step' | 'check' | 'quiz' | 'var_table'
+  fieldKey: string
+  value?: unknown
+}
+
+/** Table event payload */
+export interface TableEventPayload {
+  tableName: string
+  rowIndex?: number
+  columns: string[]
+}

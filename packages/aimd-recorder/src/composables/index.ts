@@ -1,9 +1,38 @@
-/**
- * AIMD Editor Composables
- * 
- * Placeholder for composable exports
- * Composables will be migrated from apps/web/src/components/custom/aimd/composables
- */
+export { captureFocusSnapshot, restoreFocusSnapshot } from './useFocusManagement'
+export type { FocusSnapshot } from './useFocusManagement'
 
-// TODO: Export reusable AIMD editor composables
-export {}
+export {
+  cloneRecordData,
+  normalizeStepLike,
+  normalizeIncomingRecord,
+  replaceSection,
+  applyNormalizedRecord,
+  applyIncomingRecord,
+  normalizeStepFields,
+  normalizeCheckFields,
+  normalizeQuizFields,
+  normalizeVarTableFields,
+  getQuizDefaultValue,
+  ensureDefaultsFromFields,
+  createEmptyVarTableRow,
+  normalizeVarTableRows,
+} from './useRecordState'
+
+export {
+  normalizeVarTypeName,
+  getVarInputKind,
+  unwrapStructuredValue,
+  toBooleanValue,
+  toDateValue,
+  formatDateTimeWithTimezone,
+  normalizeDateTimeValueWithTimezone,
+  formatDateForInput,
+  getVarInputDisplayValue,
+  parseVarInputValue,
+  calculateVarStackWidth,
+  measureVarLabelWidth,
+  measureSingleLineControlWidth,
+  syncAutoWrapTextareaHeight,
+  applyVarStackWidth,
+} from './useVarHelpers'
+export type { VarInputKind } from './useVarHelpers'

@@ -7,30 +7,103 @@ import type {
   AimdQuizNode,
   AimdStepNode,
   AimdVarNode,
-  AimdVarTableField,
   AimdVarTableNode,
   ExtractedAimdFields,
 } from "@airalogy/aimd-core/types"
 import { parseAndExtract, renderToVue } from "@airalogy/aimd-renderer"
 import { applyClientAssigners } from "../client-assigner"
+import type { AimdComponentRenderer } from "@airalogy/aimd-renderer"
 import type { AimdRecorderMessagesInput } from "../locales"
 import {
   createAimdRecorderMessages,
   getAimdRecorderScopeLabel,
   resolveAimdRecorderLocale,
 } from "../locales"
-import type { AimdProtocolRecordData } from "../types"
+import type {
+  AimdFieldMeta,
+  AimdFieldState,
+  AimdProtocolRecordData,
+  FieldEventPayload,
+  TableEventPayload,
+} from "../types"
 import { createEmptyProtocolRecordData } from "../types"
+import {
+  applyIncomingRecord,
+  cloneRecordData,
+  createEmptyVarTableRow,
+  ensureDefaultsFromFields,
+  getQuizDefaultValue,
+  normalizeVarTableRows,
+} from "../composables/useRecordState"
+import {
+  applyVarStackWidth,
+  formatDateTimeWithTimezone,
+  getVarInputDisplayValue,
+  getVarInputKind,
+  normalizeDateTimeValueWithTimezone,
+  normalizeVarTypeName,
+  parseVarInputValue,
+  syncAutoWrapTextareaHeight,
+  toBooleanValue,
+  unwrapStructuredValue,
+  type VarInputKind,
+} from "../composables/useVarHelpers"
+import {
+  captureFocusSnapshot,
+  restoreFocusSnapshot,
+} from "../composables/useFocusManagement"
+import type { FocusSnapshot } from "../composables/useFocusManagement"
 import AimdQuizRecorder from "./AimdQuizRecorder.vue"
 
+// ---------------------------------------------------------------------------
+// Props & emits
+// ---------------------------------------------------------------------------
+
 const props = withDefaults(defineProps<{
+  /** AIMD markdown content to render */
   content: string
+  /** Current record data (v-model) */
   modelValue?: Partial<AimdProtocolRecordData>
+  /** When true all inputs are read-only */
   readonly?: boolean
+  /** Used to pre-fill currenttime / username fields */
   currentUserName?: string
   now?: Date | string | number
   locale?: string
   messages?: AimdRecorderMessagesInput
+
+  // ── Extension props ──────────────────────────────────────────────────────
+
+  /**
+   * Per-field metadata keyed by "section:fieldName" (e.g. "var:temp").
+   * Controls inputType overrides, assigner mode, enum options, etc.
+   */
+  fieldMeta?: Record<string, AimdFieldMeta>
+
+  /**
+   * Per-field runtime state keyed by "section:fieldName".
+   * Drives loading / error / validationError styling.
+   */
+  fieldState?: Record<string, AimdFieldState>
+
+  /**
+   * Optional wrapper applied to every rendered field VNode.
+   * Receives (fieldKey, fieldType, defaultVNode) and should return a VNode.
+   * Use to inject assigner buttons, dependency tags, validation errors, etc.
+   */
+  wrapField?: (fieldKey: string, fieldType: string, defaultVNode: VNode) => VNode
+
+  /**
+   * Renderer overrides keyed by AIMD field type ("var", "step", …).
+   * Return null/undefined to fall through to the built-in renderer.
+   */
+  customRenderers?: Partial<Record<string, AimdComponentRenderer>>
+
+  /**
+   * Resolves relative paths / Airalogy file IDs to displayable URLs.
+   * Reserved for future file-type field support.
+   */
+  resolveFile?: (src: string) => string | null
 }>(), {
   modelValue: undefined,
   readonly: false,
@@ -38,13 +111,43 @@ const props = withDefaults(defineProps<{
   now: undefined,
   locale: undefined,
   messages: undefined,
+  fieldMeta: undefined,
+  fieldState: undefined,
+  wrapField: undefined,
+  customRenderers: undefined,
+  resolveFile: undefined,
 })
 
 const emit = defineEmits<{
+  /** Full record updated (v-model) */
   (e: "update:modelValue", value: AimdProtocolRecordData): void
+  /** Extracted field list changed (content reparsed) */
   (e: "fields-change", fields: ExtractedAimdFields): void
+  /** Parse / render error */
   (e: "error", message: string): void
+
+  // ── Granular field events ─────────────────────────────────────────────────
+  /** A single field value changed */
+  (e: "field-change", payload: FieldEventPayload): void
+  /** A field lost focus — use to trigger external validation */
+  (e: "field-blur", payload: FieldEventPayload): void
+
+  // ── Assigner events ───────────────────────────────────────────────────────
+  /** Host app should run assigner calculation for the given field */
+  (e: "assigner-request", payload: FieldEventPayload): void
+  /** Host app should cancel an in-flight assigner for the given field */
+  (e: "assigner-cancel", payload: FieldEventPayload): void
+
+  // ── Table events ──────────────────────────────────────────────────────────
+  /** A table row was added */
+  (e: "table-add-row", payload: TableEventPayload): void
+  /** A table row was removed */
+  (e: "table-remove-row", payload: TableEventPayload): void
 }>()
+
+// ---------------------------------------------------------------------------
+// Internal state
+// ---------------------------------------------------------------------------
 
 const inlineNodes = ref<VNode[]>([])
 const renderError = ref("")
@@ -83,13 +186,6 @@ const EMPTY_FIELDS: ExtractedAimdFields = {
   fig: [],
 }
 
-interface FocusSnapshot {
-  key: string
-  selectionStart?: number | null
-  selectionEnd?: number | null
-  selectionDirection?: HTMLInputElement["selectionDirection"]
-}
-
 interface VarTableDragState {
   tableName: string
   rowIndex: number
@@ -103,139 +199,8 @@ interface VarInputDisplayOverride {
 const varInputDisplayOverrides = reactive<Record<string, VarInputDisplayOverride>>({})
 const clientAssigners = ref<AimdClientAssignerField[]>([])
 
-function cloneRecordData(value: AimdProtocolRecordData): AimdProtocolRecordData {
-  return JSON.parse(JSON.stringify(value))
-}
-
-function normalizeStepLike(value: unknown): { checked: boolean, annotation: string } {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { checked: false, annotation: "" }
-  }
-
-  const obj = value as Record<string, unknown>
-  return {
-    checked: Boolean(obj.checked),
-    annotation: typeof obj.annotation === "string" ? obj.annotation : "",
-  }
-}
-
-function normalizeIncomingRecord(value: Partial<AimdProtocolRecordData> | undefined): AimdProtocolRecordData {
-  const normalized = createEmptyProtocolRecordData()
-  if (!value || typeof value !== "object") {
-    return normalized
-  }
-
-  if (value.var && typeof value.var === "object") {
-    normalized.var = { ...value.var }
-  }
-  if (value.quiz && typeof value.quiz === "object") {
-    normalized.quiz = { ...value.quiz }
-  }
-  if (value.step && typeof value.step === "object") {
-    for (const [key, item] of Object.entries(value.step)) {
-      normalized.step[key] = normalizeStepLike(item)
-    }
-  }
-  if (value.check && typeof value.check === "object") {
-    for (const [key, item] of Object.entries(value.check)) {
-      normalized.check[key] = normalizeStepLike(item)
-    }
-  }
-
-  return normalized
-}
-
-function replaceSection(target: Record<string, unknown>, source: Record<string, unknown>) {
-  for (const key of Object.keys(target)) {
-    delete target[key]
-  }
-  Object.assign(target, source)
-}
-
-function applyNormalizedRecord(normalized: AimdProtocolRecordData) {
-  replaceSection(localRecord.var as Record<string, unknown>, normalized.var)
-  replaceSection(localRecord.step as Record<string, unknown>, normalized.step as Record<string, unknown>)
-  replaceSection(localRecord.check as Record<string, unknown>, normalized.check as Record<string, unknown>)
-  replaceSection(localRecord.quiz as Record<string, unknown>, normalized.quiz)
-}
-
-function applyIncomingRecord(value: Partial<AimdProtocolRecordData> | undefined) {
-  applyNormalizedRecord(normalizeIncomingRecord(value))
-}
-
-function captureFocusSnapshot(): FocusSnapshot | null {
-  if (typeof document === "undefined" || !contentRoot.value) {
-    return null
-  }
-
-  const activeElement = document.activeElement
-  if (!(activeElement instanceof HTMLElement) || !contentRoot.value.contains(activeElement)) {
-    return null
-  }
-
-  const key = activeElement.dataset.recFocusKey
-  if (!key) {
-    return null
-  }
-
-  const snapshot: FocusSnapshot = { key }
-  if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
-    snapshot.selectionStart = activeElement.selectionStart
-    snapshot.selectionEnd = activeElement.selectionEnd
-    snapshot.selectionDirection = activeElement.selectionDirection
-  }
-
-  return snapshot
-}
-
-function restoreFocusSnapshot(snapshot: FocusSnapshot | null) {
-  if (!snapshot || !contentRoot.value) {
-    return
-  }
-
-  const candidates = contentRoot.value.querySelectorAll<HTMLElement>("[data-rec-focus-key]")
-  let target: HTMLElement | null = null
-  for (let index = 0; index < candidates.length; index += 1) {
-    const candidate = candidates[index]
-    if (candidate?.dataset.recFocusKey === snapshot.key) {
-      target = candidate
-      break
-    }
-  }
-
-  if (!target) {
-    return
-  }
-
-  try {
-    target.focus({ preventScroll: true })
-  }
-  catch {
-    target.focus()
-  }
-
-  if (
-    (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
-    && snapshot.selectionStart !== undefined
-    && snapshot.selectionEnd !== undefined
-  ) {
-    try {
-      target.setSelectionRange(
-        snapshot.selectionStart ?? 0,
-        snapshot.selectionEnd ?? 0,
-        snapshot.selectionDirection ?? undefined,
-      )
-    }
-    catch {
-      // Ignore controls that do not support restoring a selection range.
-    }
-  }
-}
-
 function emitRecordUpdate() {
-  if (syncingFromExternal) {
-    return
-  }
+  if (syncingFromExternal) return
   emit("update:modelValue", cloneRecordData(localRecord))
 }
 
@@ -283,7 +248,7 @@ function triggerManualClientAssigners(ids?: string[]): boolean {
 }
 
 function scheduleInlineRebuild() {
-  pendingFocusSnapshot = captureFocusSnapshot() ?? pendingFocusSnapshot
+  pendingFocusSnapshot = captureFocusSnapshot(contentRoot.value) ?? pendingFocusSnapshot
   pendingInlineBuildRequestId = ++inlineBuildRequestId
   if (renderScheduled) {
     return
@@ -376,288 +341,6 @@ function normalizeQuizFields(raw: unknown): AimdQuizField[] {
   ))
 }
 
-function normalizeVarTableFields(raw: unknown): AimdVarTableField[] {
-  if (!Array.isArray(raw)) {
-    return []
-  }
-
-  return raw.flatMap((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) {
-      return []
-    }
-
-    const obj = item as Record<string, unknown>
-    const id = getAimdId(obj)
-    if (!id || !Array.isArray(obj.subvars)) {
-      return []
-    }
-
-    const subvars = obj.subvars.flatMap((subvar) => {
-      const subvarId = getAimdId(subvar)
-      if (!subvarId) {
-        return []
-      }
-
-      const subvarObj = subvar && typeof subvar === "object" && !Array.isArray(subvar)
-        ? subvar as Record<string, unknown>
-        : {}
-      return [{
-        ...subvarObj,
-        id: subvarId,
-      }]
-    })
-
-    return [{
-      ...(obj as Omit<AimdVarTableField, "id" | "subvars">),
-      id,
-      subvars,
-    }]
-  })
-}
-
-function getQuizDefaultValue(quiz: AimdQuizField): unknown {
-  if (quiz.type === "choice") {
-    const optionKeys = new Set((quiz.options || []).map(option => option.key))
-    if (quiz.mode === "multiple") {
-      if (Array.isArray(quiz.default)) {
-        return quiz.default.filter((item): item is string => typeof item === "string" && optionKeys.has(item))
-      }
-      return []
-    }
-
-    if (typeof quiz.default === "string" && optionKeys.has(quiz.default)) {
-      return quiz.default
-    }
-    return ""
-  }
-
-  if (quiz.type === "blank") {
-    const blankKeys = (quiz.blanks || []).map(blank => blank.key)
-    if (quiz.default && typeof quiz.default === "object" && !Array.isArray(quiz.default)) {
-      const objDefault = quiz.default as Record<string, unknown>
-      const normalized: Record<string, string> = {}
-      for (const key of blankKeys) {
-        const value = objDefault[key]
-        normalized[key] = typeof value === "string" ? value : ""
-      }
-      return normalized
-    }
-
-    if (typeof quiz.default === "string" && blankKeys.length === 1) {
-      return { [blankKeys[0]]: quiz.default }
-    }
-
-    const blankValueMap: Record<string, string> = {}
-    for (const key of blankKeys) {
-      blankValueMap[key] = ""
-    }
-    return blankValueMap
-  }
-
-  if (typeof quiz.default === "string") {
-    return quiz.default
-  }
-  return ""
-}
-
-type VarInputKind = "text" | "number" | "checkbox" | "textarea" | "date" | "datetime" | "time"
-
-function normalizeVarTypeName(type: string | undefined): string {
-  return (type || "str").trim().toLowerCase().replace(/[\s_-]/g, "")
-}
-
-function getVarInputKind(type: string | undefined): VarInputKind {
-  const normalized = normalizeVarTypeName(type)
-
-  if (normalized === "float" || normalized === "int" || normalized === "integer" || normalized === "number") {
-    return "number"
-  }
-
-  if (normalized === "bool" || normalized === "boolean" || normalized === "checkbox") {
-    return "checkbox"
-  }
-
-  if (normalized === "date") {
-    return "date"
-  }
-
-  if (normalized === "datetime" || normalized === "currenttime") {
-    return "datetime"
-  }
-
-  if (normalized === "time" || normalized === "duration") {
-    return "time"
-  }
-
-  if (normalized === "md" || normalized === "markdown" || normalized === "airalogymarkdown") {
-    return "textarea"
-  }
-
-  return "text"
-}
-
-function unwrapStructuredValue(value: unknown): unknown {
-  if (value && typeof value === "object" && !Array.isArray(value) && "value" in value) {
-    return (value as { value: unknown }).value
-  }
-  return value
-}
-
-function toBooleanValue(value: unknown): boolean {
-  const normalized = unwrapStructuredValue(value)
-
-  if (typeof normalized === "boolean") {
-    return normalized
-  }
-  if (typeof normalized === "number") {
-    return normalized !== 0
-  }
-  if (typeof normalized === "string") {
-    const text = normalized.trim().toLowerCase()
-    if (text === "" || text === "false" || text === "0" || text === "no" || text === "off") {
-      return false
-    }
-    if (text === "true" || text === "1" || text === "yes" || text === "on") {
-      return true
-    }
-  }
-  return Boolean(normalized)
-}
-
-function toDateValue(value: unknown): Date | null {
-  const normalized = unwrapStructuredValue(value)
-
-  if (normalized instanceof Date) {
-    return Number.isNaN(normalized.getTime()) ? null : normalized
-  }
-
-  if (typeof normalized === "number") {
-    const date = new Date(normalized)
-    return Number.isNaN(date.getTime()) ? null : date
-  }
-
-  if (typeof normalized === "string" && normalized.trim()) {
-    const text = normalized.trim().replace(/\s+/, "T")
-    const date = new Date(text)
-    return Number.isNaN(date.getTime()) ? null : date
-  }
-
-  return null
-}
-
-function pad2(value: number): string {
-  return String(value).padStart(2, "0")
-}
-
-function formatTimezoneOffset(date: Date): string {
-  const totalMinutes = -date.getTimezoneOffset()
-  const sign = totalMinutes >= 0 ? "+" : "-"
-  const absMinutes = Math.abs(totalMinutes)
-  const hours = Math.floor(absMinutes / 60)
-  const minutes = absMinutes % 60
-  return `${sign}${pad2(hours)}:${pad2(minutes)}`
-}
-
-function formatDateTimeWithTimezone(date: Date): string {
-  const year = date.getFullYear()
-  const month = pad2(date.getMonth() + 1)
-  const day = pad2(date.getDate())
-  const hour = pad2(date.getHours())
-  const minute = pad2(date.getMinutes())
-  return `${year}-${month}-${day}T${hour}:${minute}${formatTimezoneOffset(date)}`
-}
-
-function normalizeDateTimeValueWithTimezone(value: unknown): unknown {
-  const normalized = unwrapStructuredValue(value)
-
-  if (typeof normalized === "string") {
-    const text = normalized.trim()
-    if (!text) {
-      return ""
-    }
-
-    const normalizedText = text.replace(" ", "T")
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(normalizedText)) {
-      return normalizedText
-    }
-
-    const parsed = new Date(normalizedText)
-    return Number.isNaN(parsed.getTime()) ? value : formatDateTimeWithTimezone(parsed)
-  }
-
-  if (normalized === null || typeof normalized === "undefined") {
-    return ""
-  }
-
-  const parsed = toDateValue(normalized)
-  return parsed ? formatDateTimeWithTimezone(parsed) : value
-}
-
-function formatDateForInput(value: unknown, kind: "date" | "datetime" | "time"): string {
-  const normalized = unwrapStructuredValue(value)
-
-  if (typeof normalized === "string" && normalized.trim()) {
-    const text = normalized.trim()
-
-    if (kind === "date" && /^\d{4}-\d{2}-\d{2}/.test(text)) {
-      return text.slice(0, 10)
-    }
-
-    if (kind === "datetime") {
-      const normalizedText = text.replace(" ", "T")
-      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(normalizedText)) {
-        return normalizedText.slice(0, 16)
-      }
-    }
-
-    if (kind === "time" && /^\d{2}:\d{2}/.test(text)) {
-      return text.slice(0, 8)
-    }
-  }
-
-  const date = toDateValue(normalized)
-  if (!date) {
-    return ""
-  }
-
-  const year = date.getFullYear()
-  const month = pad2(date.getMonth() + 1)
-  const day = pad2(date.getDate())
-  const hour = pad2(date.getHours())
-  const minute = pad2(date.getMinutes())
-  const second = pad2(date.getSeconds())
-
-  if (kind === "date") {
-    return `${year}-${month}-${day}`
-  }
-  if (kind === "time") {
-    return `${hour}:${minute}:${second}`
-  }
-  return `${year}-${month}-${day}T${hour}:${minute}`
-}
-
-function getVarInputDisplayValue(value: unknown, kind: VarInputKind): string | number {
-  const normalized = unwrapStructuredValue(value)
-
-  if (kind === "date" || kind === "datetime" || kind === "time") {
-    return formatDateForInput(normalized, kind)
-  }
-
-  if (kind === "number") {
-    return typeof normalized === "number" ? normalized : (typeof normalized === "string" ? normalized : "")
-  }
-
-  if (typeof normalized === "string") {
-    return normalized
-  }
-
-  if (normalized === null || typeof normalized === "undefined") {
-    return ""
-  }
-
-  return String(normalized)
-}
-
 function getVarInitialDisplayOverride(node: AimdVarNode, type: string | undefined): VarInputDisplayOverride | null {
   const raw = node.definition?.defaultRaw?.trim()
   if (!raw) {
@@ -703,45 +386,11 @@ function clearVarInputDisplayOverride(id: string) {
   }
 }
 
-function parseVarInputValue(rawValue: string, type: string | undefined, kind: VarInputKind): unknown {
-  const normalizedType = normalizeVarTypeName(type)
-
-  if (kind === "datetime") {
-    return normalizeDateTimeValueWithTimezone(rawValue)
-  }
-
-  if (kind === "number") {
-    const text = rawValue.trim()
-    if (!text) {
-      return ""
-    }
-
-    if (
-      normalizedType !== "int"
-      && normalizedType !== "integer"
-      && (/^[+-]?$/.test(text) || /^[+-]?(?:\d+)?\.$/.test(text))
-    ) {
-      return rawValue
-    }
-
-    const parsed = normalizedType === "int" || normalizedType === "integer"
-      ? Number.parseInt(text, 10)
-      : Number.parseFloat(text)
-    return Number.isNaN(parsed) ? rawValue : parsed
-  }
-
-  return rawValue
-}
-
 function resolveNowDate(): Date {
-  if (props.now instanceof Date) {
-    return Number.isNaN(props.now.getTime()) ? new Date() : props.now
-  }
+  if (props.now instanceof Date) return Number.isNaN(props.now.getTime()) ? new Date() : props.now
   if (typeof props.now === "string" || typeof props.now === "number") {
-    const date = new Date(props.now)
-    if (!Number.isNaN(date.getTime())) {
-      return date
-    }
+    const d = new Date(props.now)
+    if (!Number.isNaN(d.getTime())) return d
   }
   return new Date()
 }
@@ -750,238 +399,28 @@ function getVarInitialValue(node: AimdVarNode, type: string | undefined): unknow
   if (node.definition && Object.prototype.hasOwnProperty.call(node.definition, "default")) {
     return node.definition.default
   }
-
   const normalizedType = normalizeVarTypeName(type)
   const inputKind = getVarInputKind(type)
-
-  if (inputKind === "checkbox") {
-    return false
-  }
-
-  if (normalizedType === "currenttime") {
-    return formatDateTimeWithTimezone(resolveNowDate())
-  }
-
-  if (normalizedType === "username" && typeof props.currentUserName === "string") {
-    return props.currentUserName
-  }
-
+  if (inputKind === "checkbox") return false
+  if (normalizedType === "currenttime") return formatDateTimeWithTimezone(resolveNowDate())
+  if (normalizedType === "username" && typeof props.currentUserName === "string") return props.currentUserName
   return ""
 }
 
 function getVarPlaceholder(node: AimdVarNode): string | undefined {
   const title = node.definition?.kwargs?.title
-  if (typeof title === "string" && title.trim()) {
-    return title.trim()
-  }
-  return undefined
+  return typeof title === "string" && title.trim() ? title.trim() : undefined
 }
 
-function getVarControlMinWidth(inputKind: VarInputKind): number {
-  switch (inputKind) {
-    case "textarea":
-      return 160
-    default:
-      return 0
-  }
-}
-
-function getVarControlExtraWidth(inputKind: VarInputKind): number {
-  switch (inputKind) {
-    case "datetime":
-      return 36
-    case "date":
-      return 32
-    case "time":
-      return 28
-    default:
-      return 4
-  }
-}
-
-function calculateVarStackWidth(name: string, inputKind: VarInputKind): string {
-  const labelChars = Math.max(name.length + 7, 10)
-  const approximateCharWidth = 8
-  const horizontalPadding = 16
-  const widthPx = Math.round(labelChars * approximateCharWidth + horizontalPadding)
-  const minWidthPx = getVarControlMinWidth(inputKind)
-  const finalWidthPx = Math.max(minWidthPx, widthPx)
-
-  return `${finalWidthPx}px`
-}
-
-function parsePx(value: string): number {
-  const parsed = Number.parseFloat(value)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-let varTextMeasureCanvas: HTMLCanvasElement | null = null
-
-function getMeasureContext(): CanvasRenderingContext2D | null {
-  if (typeof window === "undefined") {
-    return null
-  }
-
-  if (!varTextMeasureCanvas) {
-    varTextMeasureCanvas = document.createElement("canvas")
-  }
-
-  return varTextMeasureCanvas.getContext("2d")
-}
-
-function measureStyledTextWidth(text: string, computed: CSSStyleDeclaration): number {
-  const ctx = getMeasureContext()
-  if (!ctx) {
-    return 0
-  }
-
-  const fontSize = computed.fontSize || "16px"
-  const fontFamily = computed.fontFamily || "sans-serif"
-  const fontWeight = computed.fontWeight || "400"
-  const fontStyle = computed.fontStyle || "normal"
-  ctx.font = `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`
-
-  return ctx.measureText(text).width
-}
-
-function measureLabelTokenWidth(token: HTMLElement): number {
-  if (typeof window === "undefined") {
-    return token.scrollWidth
-  }
-
-  const computed = window.getComputedStyle(token)
-  const text = (token.textContent || "").trim()
-  const textWidth = measureStyledTextWidth(text, computed)
-  const horizontal =
-    parsePx(computed.paddingLeft)
-    + parsePx(computed.paddingRight)
-    + parsePx(computed.borderLeftWidth)
-    + parsePx(computed.borderRightWidth)
-    + parsePx(computed.marginLeft)
-    + parsePx(computed.marginRight)
-
-  return textWidth + horizontal
-}
-
-function measureVarLabelWidth(wrapper: HTMLElement): number {
-  const scope = wrapper.querySelector(".aimd-field__scope--var") as HTMLElement | null
-  const id = wrapper.querySelector(".aimd-field__id") as HTMLElement | null
-  if (scope && id) {
-    return measureLabelTokenWidth(scope) + measureLabelTokenWidth(id) + 4
-  }
-
-  const fallbackLabel = wrapper.querySelector(".aimd-field__label") as HTMLElement | null
-  return fallbackLabel ? fallbackLabel.scrollWidth + 2 : 0
-}
-
-function measureSingleLineControlWidth(input: HTMLInputElement | HTMLTextAreaElement): number {
-  if (typeof window === "undefined") {
-    return input.scrollWidth
-  }
-
-  const ctx = getMeasureContext()
-  if (!ctx) {
-    return input.scrollWidth
-  }
-
-  const computed = window.getComputedStyle(input)
-  const fontSize = computed.fontSize || "16px"
-  const fontFamily = computed.fontFamily || "sans-serif"
-  const fontWeight = computed.fontWeight || "400"
-  const fontStyle = computed.fontStyle || "normal"
-  ctx.font = `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`
-
-  const text = input.value || input.placeholder || ""
-  const textWidth = ctx.measureText(text).width
-  const padding = parsePx(computed.paddingLeft) + parsePx(computed.paddingRight)
-  return textWidth + padding + 2
-}
-
-function syncAutoWrapTextareaHeight(textarea: HTMLTextAreaElement) {
-  if (typeof window === "undefined") {
-    return
-  }
-
-  const isCompactText = textarea.classList.contains("aimd-rec-inline__textarea--stacked-text")
-  textarea.style.height = "auto"
-  const computed = window.getComputedStyle(textarea)
-  const minHeight = isCompactText
-    ? (parsePx(computed.getPropertyValue("--rec-var-control-height")) || parsePx(computed.height))
-    : (parsePx(computed.minHeight) || parsePx(computed.height))
-
-  if (isCompactText && textarea.value.length === 0) {
-    textarea.style.height = `${Math.ceil(minHeight)}px`
-    return
-  }
-
-  const borderHeight = parsePx(computed.borderTopWidth) + parsePx(computed.borderBottomWidth)
-  const nextHeight = Math.max(minHeight, textarea.scrollHeight + borderHeight)
-  textarea.style.height = `${Math.ceil(nextHeight)}px`
-}
-
-function applyVarStackWidth(target: HTMLElement, inputKind: VarInputKind) {
-  const wrapper = target.closest(".aimd-rec-inline--var-stacked") as HTMLElement | null
-  if (!wrapper || typeof window === "undefined") {
-    return
-  }
-
-  const labelWidth = measureVarLabelWidth(wrapper)
-
-  const minWidthPx = getVarControlMinWidth(inputKind)
-  let controlWidth = 0
-  const input = wrapper.querySelector(".aimd-rec-inline__input--stacked, .aimd-rec-inline__textarea--stacked-text") as
-    HTMLInputElement | HTMLTextAreaElement | null
-  if (input) {
-    controlWidth = measureSingleLineControlWidth(input) + getVarControlExtraWidth(inputKind)
-  }
-
-  const measuredWidth = Math.max(minWidthPx, labelWidth, controlWidth)
-  wrapper.style.width = `${Math.ceil(measuredWidth)}px`
-  wrapper.style.maxWidth = "100%"
-}
+// ---------------------------------------------------------------------------
+// Table helpers
+// ---------------------------------------------------------------------------
 
 function getVarTableColumns(node: AimdVarTableNode): string[] {
-  if (Array.isArray(node.columns) && node.columns.length > 0) {
-    return node.columns
-  }
+  if (Array.isArray(node.columns) && node.columns.length > 0) return node.columns
   const subvars = node.definition?.subvars
-  if (subvars && typeof subvars === "object") {
-    return Object.keys(subvars)
-  }
+  if (subvars && typeof subvars === "object") return Object.keys(subvars)
   return []
-}
-
-function createEmptyVarTableRow(columns: string[]): Record<string, string> {
-  const row: Record<string, string> = {}
-  for (const column of columns) {
-    row[column] = ""
-  }
-  return row
-}
-
-function normalizeVarTableRows(raw: unknown, columns: string[]): Record<string, string>[] {
-  if (!Array.isArray(raw)) {
-    return [createEmptyVarTableRow(columns)]
-  }
-
-  const rows = raw.map((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) {
-      return createEmptyVarTableRow(columns)
-    }
-    const source = item as Record<string, unknown>
-    const row: Record<string, string> = {}
-    for (const column of columns) {
-      const value = source[column]
-      row[column] = typeof value === "string" ? value : `${value ?? ""}`
-    }
-    return row
-  })
-
-  if (rows.length === 0) {
-    rows.push(createEmptyVarTableRow(columns))
-  }
-
-  return rows
 }
 
 function ensureVarTableRows(tableName: string, columns: string[]): Record<string, string>[] {
@@ -994,6 +433,7 @@ function addVarTableRow(tableName: string, columns: string[]) {
   const rows = ensureVarTableRows(tableName, columns)
   rows.push(createEmptyVarTableRow(columns))
   markRecordChanged({ rebuild: true, runClientAssigners: true })
+  emit("table-add-row", { tableName, columns })
 }
 
 function moveVarTableRow(tableName: string, fromIndex: number, toIndex: number, columns: string[]) {
@@ -1024,11 +464,10 @@ function moveVarTableRow(tableName: string, fromIndex: number, toIndex: number, 
 
 function removeVarTableRow(tableName: string, rowIndex: number, columns: string[]) {
   const rows = ensureVarTableRows(tableName, columns)
-  if (rows.length <= 1) {
-    return
-  }
+  if (rows.length <= 1) return
   rows.splice(rowIndex, 1)
   markRecordChanged({ rebuild: true, runClientAssigners: true })
+  emit("table-remove-row", { tableName, rowIndex, columns })
 }
 
 function getVarTableRowKey(row: Record<string, string>): string {
@@ -1135,51 +574,51 @@ function endVarTableRowDrag() {
   draggingVarTableRow = null
 }
 
-function ensureDefaultsFromFields(fields: ExtractedAimdFields): boolean {
-  let changed = false
+// ---------------------------------------------------------------------------
+// Extension helpers
+// ---------------------------------------------------------------------------
 
-  for (const vt of normalizeVarTableFields(fields.var_table)) {
-    const tableId = vt.id
-    const columns = vt.subvars.map(subvar => subvar.id)
-    const rows = localRecord.var[tableId]
-    const normalizedRows = normalizeVarTableRows(rows, columns)
-    if (JSON.stringify(normalizedRows) !== JSON.stringify(rows)) {
-      localRecord.var[tableId] = normalizedRows
-      changed = true
-    }
-  }
-
-  for (const step of normalizeStepFields(fields.step)) {
-    if (!(step.id in localRecord.step)) {
-      localRecord.step[step.id] = { checked: false, annotation: "" }
-      changed = true
-    }
-  }
-
-  for (const check of normalizeCheckFields(fields.check)) {
-    if (!(check.id in localRecord.check)) {
-      localRecord.check[check.id] = { checked: false, annotation: "" }
-      changed = true
-    }
-  }
-
-  for (const quiz of normalizeQuizFields(fields.quiz)) {
-    if (!(quiz.id in localRecord.quiz)) {
-      localRecord.quiz[quiz.id] = getQuizDefaultValue(quiz)
-      changed = true
-    }
-  }
-
-  return changed
+function maybeWrap(fieldKey: string, fieldType: string, vnode: VNode): VNode {
+  return props.wrapField ? props.wrapField(fieldKey, fieldType, vnode) : vnode
 }
+
+function fieldStateClasses(fieldKey: string): string[] {
+  const state = props.fieldState?.[fieldKey]
+  const cls: string[] = []
+  if (state?.validationError) cls.push("aimd-rec-inline--error")
+  if (state?.loading) cls.push("aimd-rec-inline--loading")
+  return cls
+}
+
+function isFieldDisabled(fieldKey: string): boolean {
+  if (props.readonly) return true
+  const meta = props.fieldMeta?.[fieldKey]
+  const state = props.fieldState?.[fieldKey]
+  return !!(meta?.disabled || state?.disabled || meta?.assigner?.mode === "auto_force")
+}
+
+// ---------------------------------------------------------------------------
+// Inline field renderers
+// ---------------------------------------------------------------------------
 
 function renderInlineVar(node: AimdVarNode): VNode {
   const id = node.id
+  const fieldKey = `var:${id}`
+
+  // 1. Custom renderer override
+  if (props.customRenderers?.var) {
+    const custom = props.customRenderers.var(node, {} as any, [])
+    if (custom) return maybeWrap(fieldKey, "var", custom as VNode)
+  }
+
   const type = node.definition?.type || "str"
   const normalizedType = normalizeVarTypeName(type)
   const inputKind = getVarInputKind(type)
   const isIntegerInput = normalizedType === "int" || normalizedType === "integer"
   const usesDecimalTextInput = inputKind === "number" && !isIntegerInput
+  const meta = props.fieldMeta?.[fieldKey]
+
+  // 2. Initialise value
   if (!(id in localRecord.var)) {
     localRecord.var[id] = getVarInitialValue(node, type)
     const initialDisplayOverride = getVarInitialDisplayOverride(node, type)
@@ -1189,9 +628,9 @@ function renderInlineVar(node: AimdVarNode): VNode {
     recordInitializedDuringRender = true
   }
   if (inputKind === "datetime") {
-    const normalizedDateTime = normalizeDateTimeValueWithTimezone(localRecord.var[id])
-    if (normalizedDateTime !== localRecord.var[id]) {
-      localRecord.var[id] = normalizedDateTime
+    const norm = normalizeDateTimeValueWithTimezone(localRecord.var[id])
+    if (norm !== localRecord.var[id]) {
+      localRecord.var[id] = norm
       recordInitializedDuringRender = true
     }
   }
@@ -1199,17 +638,48 @@ function renderInlineVar(node: AimdVarNode): VNode {
   const htmlInputType = inputKind === "datetime"
     ? "datetime-local"
     : (usesDecimalTextInput ? "text" : inputKind)
-  const placeholder = getVarPlaceholder(node)
+  const placeholder = meta?.placeholder ?? getVarPlaceholder(node)
   const displayValue = getVarDisplayValue(id, localRecord.var[id], inputKind)
-  const wrapperStyle = {
-    width: calculateVarStackWidth(id, inputKind),
-    maxWidth: "100%",
+  const disabled = isFieldDisabled(fieldKey)
+  const extraClasses = fieldStateClasses(fieldKey)
+
+  function onVarChange(rawValue: string) {
+    clearVarInputDisplayOverride(id)
+    const parsed = parseVarInputValue(rawValue, type, inputKind)
+    localRecord.var[id] = parsed
+    markRecordChanged({ runClientAssigners: true })
+    emit("field-change", { section: "var", fieldKey: id, value: parsed })
   }
 
-  const renderStackedVar = (control: VNode, variantClass?: string): VNode => {
-    return h("span", {
-      class: ["aimd-rec-inline aimd-rec-inline--var-stacked aimd-field-wrapper aimd-field-wrapper--inline", variantClass],
-      style: wrapperStyle,
+  function onVarBlur() {
+    emit("field-blur", { section: "var", fieldKey: id })
+  }
+
+  // 3. Enum select (from fieldMeta override)
+  const enumOptions = meta?.enumOptions ?? []
+  if (enumOptions.length) {
+    return maybeWrap(fieldKey, "var", h("span", {
+      class: ["aimd-rec-inline aimd-rec-inline--var-stacked aimd-field-wrapper", ...extraClasses],
+    }, [
+      h("span", { class: "aimd-field aimd-field--no-style aimd-field__label" }, [
+        h("span", { class: "aimd-field__scope aimd-field__scope--var" }, "var"),
+        h("span", { class: "aimd-field__id" }, id),
+      ]),
+      h("select", {
+        "data-rec-focus-key": `var:${id}`,
+        class: "aimd-rec-inline__input aimd-rec-inline__input--stacked aimd-rec-inline__select",
+        disabled,
+        value: localRecord.var[id],
+        onChange: (e: Event) => onVarChange((e.target as HTMLSelectElement).value),
+        onBlur: onVarBlur,
+      }, enumOptions.map(opt => h("option", { key: String(opt.value), value: opt.value }, opt.label))),
+    ]))
+  }
+
+  // 4. Default stacked widget
+  const renderStackedVar = (control: VNode, variantClass?: string): VNode =>
+    h("span", {
+      class: ["aimd-rec-inline aimd-rec-inline--var-stacked aimd-field-wrapper aimd-field-wrapper--inline", variantClass, ...extraClasses],
     }, [
       h("span", { class: "aimd-field aimd-field--no-style aimd-field__label" }, [
         h("span", { class: "aimd-field__scope aimd-field__scope--var" }, getAimdRecorderScopeLabel("var", resolvedMessages.value)),
@@ -1217,57 +687,54 @@ function renderInlineVar(node: AimdVarNode): VNode {
       ]),
       control,
     ])
-  }
 
   if (inputKind === "checkbox") {
-    return renderStackedVar(
+    return maybeWrap(fieldKey, "var", renderStackedVar(
       h("span", { class: "aimd-rec-inline__checkbox-row" }, [
         h("input", {
           "data-rec-focus-key": `var:${id}`,
           type: "checkbox",
-          disabled: props.readonly,
+          disabled,
           checked: toBooleanValue(localRecord.var[id]),
           onVnodeMounted: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
           onVnodeUpdated: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
           onChange: (event: Event) => {
-            const target = event.target as HTMLInputElement
-            localRecord.var[id] = target.checked
+            const val = (event.target as HTMLInputElement).checked
+            localRecord.var[id] = val
             markRecordChanged({ runClientAssigners: true })
+            emit("field-change", { section: "var", fieldKey: id, value: val })
           },
+          onBlur: onVarBlur,
         }),
       ]),
       "aimd-rec-inline--var-stacked--checkbox",
-    )
+    ))
   }
 
   if (inputKind === "textarea") {
-    return renderStackedVar(
+    return maybeWrap(fieldKey, "var", renderStackedVar(
       h("textarea", {
         "data-rec-focus-key": `var:${id}`,
         class: "aimd-rec-inline__textarea aimd-rec-inline__textarea--stacked",
-        disabled: props.readonly,
+        disabled,
         placeholder,
         value: displayValue,
         onVnodeMounted: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
         onVnodeUpdated: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
-        onInput: (event: Event) => {
-          const target = event.target as HTMLTextAreaElement
-          clearVarInputDisplayOverride(id)
-          localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
-          markRecordChanged({ runClientAssigners: true })
-        },
+        onInput: (event: Event) => onVarChange((event.target as HTMLTextAreaElement).value),
+        onBlur: onVarBlur,
       }),
       "aimd-rec-inline--var-stacked--textarea",
-    )
+    ))
   }
 
   if (inputKind === "text") {
-    return renderStackedVar(
+    return maybeWrap(fieldKey, "var", renderStackedVar(
       h("textarea", {
         "data-rec-focus-key": `var:${id}`,
         class: "aimd-rec-inline__textarea aimd-rec-inline__textarea--stacked aimd-rec-inline__textarea--stacked-text",
         rows: 1,
-        disabled: props.readonly,
+        disabled,
         placeholder,
         value: displayValue,
         onVnodeMounted: (vnode: any) => {
@@ -1281,24 +748,24 @@ function renderInlineVar(node: AimdVarNode): VNode {
           syncAutoWrapTextareaHeight(el)
         },
         onInput: (event: Event) => {
-          const target = event.target as HTMLTextAreaElement
-          clearVarInputDisplayOverride(id)
-          localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
-          applyVarStackWidth(target, inputKind)
-          syncAutoWrapTextareaHeight(target)
-          markRecordChanged({ runClientAssigners: true })
+          const el = event.target as HTMLTextAreaElement
+          onVarChange(el.value)
+          applyVarStackWidth(el, inputKind)
+          syncAutoWrapTextareaHeight(el)
         },
+        onBlur: onVarBlur,
       }),
-    )
+    ))
   }
 
-  return renderStackedVar(
+  // number / date / datetime / time
+  return maybeWrap(fieldKey, "var", renderStackedVar(
     h("input", {
       "data-rec-focus-key": `var:${id}`,
       class: "aimd-rec-inline__input aimd-rec-inline__input--stacked",
       type: htmlInputType,
       inputmode: inputKind === "number" ? (isIntegerInput ? "numeric" : "decimal") : undefined,
-      disabled: props.readonly,
+      disabled,
       placeholder,
       step: inputKind === "number"
         ? (isIntegerInput ? "1" : undefined)
@@ -1306,20 +773,23 @@ function renderInlineVar(node: AimdVarNode): VNode {
       value: displayValue,
       onVnodeMounted: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
       onVnodeUpdated: (vnode: any) => applyVarStackWidth(vnode.el as HTMLElement, inputKind),
-      onInput: (event: Event) => {
-        const target = event.target as HTMLInputElement
-        clearVarInputDisplayOverride(id)
-        localRecord.var[id] = parseVarInputValue(target.value, type, inputKind)
-        markRecordChanged({ runClientAssigners: true })
-      },
+      onInput: (event: Event) => onVarChange((event.target as HTMLInputElement).value),
+      onBlur: onVarBlur,
     }),
-  )
+  ))
 }
 
 function renderInlineVarTable(node: AimdVarTableNode): VNode {
   const tableName = node.id
+  const fieldKey = `var_table:${tableName}`
   const columns = getVarTableColumns(node)
   const rows = ensureVarTableRows(tableName, columns)
+  const disabled = isFieldDisabled(fieldKey)
+
+  function isColumnDisabled(col: string): boolean {
+    if (disabled) return true
+    return !!(props.fieldMeta?.[`var_table:${tableName}:${col}`]?.disabled)
+  }
 
   return h("div", { class: "aimd-field aimd-field--var-table aimd-rec-inline-table" }, [
     h("div", { class: "aimd-field__header" }, [
@@ -1358,23 +828,35 @@ function renderInlineVarTable(node: AimdVarTableNode): VNode {
             }))),
           ]),
           ...columns.map(column => h("td", { key: `${tableName}-${rowIndex}-${column}` }, [
-            h("input", {
-              "data-rec-focus-key": `var_table:${tableName}:${rowIndex}:${column}`,
-              class: "aimd-rec-table-cell-input",
-              disabled: props.readonly,
-              placeholder: column,
-              value: row[column] ?? "",
-              onInput: (event: Event) => {
-                row[column] = (event.target as HTMLInputElement).value
-                markRecordChanged({ runClientAssigners: true })
-              },
-            }),
+            (() => {
+              const colState = props.fieldState?.[`var_table:${tableName}:${column}`]
+              const cellClass = colState?.validationError
+                ? "aimd-rec-table-cell-input aimd-rec-table-cell-input--error"
+                : "aimd-rec-table-cell-input"
+              return h("input", {
+                "data-rec-focus-key": `var_table:${tableName}:${rowIndex}:${column}`,
+                class: cellClass,
+                disabled: isColumnDisabled(column),
+                placeholder: column,
+                value: row[column] ?? "",
+                onInput: (event: Event) => {
+                  row[column] = (event.target as HTMLInputElement).value
+                  markRecordChanged({ runClientAssigners: true })
+                  emit("field-change", {
+                    section: "var_table",
+                    fieldKey: `${tableName}:${column}`,
+                    value: row[column],
+                  })
+                },
+                onBlur: () => emit("field-blur", { section: "var_table", fieldKey: `${tableName}:${column}` }),
+              })
+            })(),
           ])),
           h("td", { class: "aimd-rec-inline-table__action-cell" }, [
             h("button", {
               type: "button",
               class: "aimd-rec-inline-table__row-btn",
-              disabled: props.readonly || rows.length <= 1,
+              disabled: disabled || rows.length <= 1,
               onClick: () => removeVarTableRow(tableName, rowIndex, columns),
             }, resolvedMessages.value.table.deleteRow),
           ]),
@@ -1385,7 +867,7 @@ function renderInlineVarTable(node: AimdVarTableNode): VNode {
       h("button", {
         type: "button",
         class: "aimd-rec-inline-table__add-btn",
-        disabled: props.readonly,
+        disabled,
         onClick: () => addVarTableRow(tableName, columns),
       }, `+ ${resolvedMessages.value.table.addRow}`),
     ]),
@@ -1394,24 +876,31 @@ function renderInlineVarTable(node: AimdVarTableNode): VNode {
 
 function renderInlineStep(node: AimdStepNode): VNode {
   const id = node.id
+  const fieldKey = `step:${id}`
   if (!(id in localRecord.step)) {
     localRecord.step[id] = { checked: false, annotation: "" }
   }
 
   const state = localRecord.step[id]
   const stepNumber = node.step || "?"
+  const disabled = isFieldDisabled(fieldKey)
+  const extraClasses = fieldStateClasses(fieldKey)
 
-  return h("span", { class: "aimd-rec-inline aimd-rec-inline--step aimd-field aimd-field--step" }, [
+  return maybeWrap(fieldKey, "step", h("span", {
+    class: ["aimd-rec-inline aimd-rec-inline--step aimd-field aimd-field--step", ...extraClasses],
+  }, [
     h("label", { class: "aimd-rec-inline__check-wrap" }, [
       h("input", {
         "data-rec-focus-key": `step:${id}:checked`,
         type: "checkbox",
-        disabled: props.readonly,
+        disabled,
         checked: Boolean(state.checked),
         onChange: (event: Event) => {
           state.checked = (event.target as HTMLInputElement).checked
           markRecordChanged()
+          emit("field-change", { section: "step", fieldKey: id, value: state.checked })
         },
+        onBlur: () => emit("field-blur", { section: "step", fieldKey: id }),
       }),
       h("span", { class: "aimd-field__scope" }, getAimdRecorderScopeLabel("step", resolvedMessages.value)),
       h("span", { class: "aimd-rec-inline__step-num" }, stepNumber),
@@ -1420,37 +909,46 @@ function renderInlineStep(node: AimdStepNode): VNode {
     h("input", {
       "data-rec-focus-key": `step:${id}:annotation`,
       class: "aimd-rec-inline__input aimd-rec-inline__input--annotation",
-      disabled: props.readonly,
+      disabled,
       placeholder: resolvedMessages.value.step.annotationPlaceholder,
       value: state.annotation || "",
       onInput: (event: Event) => {
         state.annotation = (event.target as HTMLInputElement).value
         markRecordChanged()
+        emit("field-change", { section: "step", fieldKey: `${id}:annotation`, value: state.annotation })
       },
+      onBlur: () => emit("field-blur", { section: "step", fieldKey: id }),
     }),
-  ])
+  ]))
 }
 
 function renderInlineCheck(node: AimdCheckNode): VNode {
   const id = node.id
+  const fieldKey = `check:${id}`
   if (!(id in localRecord.check)) {
     localRecord.check[id] = { checked: false, annotation: "" }
   }
 
   const state = localRecord.check[id]
+  const disabled = isFieldDisabled(fieldKey)
+  const extraClasses = fieldStateClasses(fieldKey)
 
-  return h("span", { class: "aimd-rec-inline aimd-rec-inline--check aimd-field aimd-field--check" }, [
+  return maybeWrap(fieldKey, "check", h("span", {
+    class: ["aimd-rec-inline aimd-rec-inline--check aimd-field aimd-field--check", ...extraClasses],
+  }, [
     h("label", { class: "aimd-rec-inline__check-wrap" }, [
       h("input", {
         "data-rec-focus-key": `check:${id}:checked`,
         type: "checkbox",
         class: "aimd-checkbox",
-        disabled: props.readonly,
+        disabled,
         checked: Boolean(state.checked),
         onChange: (event: Event) => {
           state.checked = (event.target as HTMLInputElement).checked
           markRecordChanged()
+          emit("field-change", { section: "check", fieldKey: id, value: state.checked })
         },
+        onBlur: () => emit("field-blur", { section: "check", fieldKey: id }),
       }),
       h("span", { class: "aimd-field__scope" }, getAimdRecorderScopeLabel("check", resolvedMessages.value)),
       h("span", { class: "aimd-field__name" }, node.label || id),
@@ -1458,19 +956,22 @@ function renderInlineCheck(node: AimdCheckNode): VNode {
     h("input", {
       "data-rec-focus-key": `check:${id}:annotation`,
       class: "aimd-rec-inline__input aimd-rec-inline__input--annotation",
-      disabled: props.readonly,
+      disabled,
       placeholder: resolvedMessages.value.check.annotationPlaceholder,
       value: state.annotation || "",
       onInput: (event: Event) => {
         state.annotation = (event.target as HTMLInputElement).value
         markRecordChanged()
+        emit("field-change", { section: "check", fieldKey: `${id}:annotation`, value: state.annotation })
       },
+      onBlur: () => emit("field-blur", { section: "check", fieldKey: id }),
     }),
-  ])
+  ]))
 }
 
 function renderInlineQuiz(node: AimdQuizNode): VNode {
   const quizId = node.id
+  const fieldKey = `quiz:${quizId}`
   const quizField = {
     id: quizId,
     type: node.quizType,
@@ -1488,7 +989,7 @@ function renderInlineQuiz(node: AimdQuizNode): VNode {
     localRecord.quiz[quizId] = getQuizDefaultValue(quizField)
   }
 
-  return h(AimdQuizRecorder, {
+  return maybeWrap(fieldKey, "quiz", h(AimdQuizRecorder, {
     class: "aimd-rec-inline aimd-rec-inline--quiz",
     quiz: quizField,
     modelValue: localRecord.quiz[quizId],
@@ -1499,9 +1000,14 @@ function renderInlineQuiz(node: AimdQuizNode): VNode {
     "onUpdate:modelValue": (value: unknown) => {
       localRecord.quiz[quizId] = value
       markRecordChanged()
+      emit("field-change", { section: "quiz", fieldKey: quizId, value })
     },
-  })
+  }))
 }
+
+// ---------------------------------------------------------------------------
+// Rebuild pipeline
+// ---------------------------------------------------------------------------
 
 async function rebuildInlineNodes(
   expectedRequestId?: number,
@@ -1534,28 +1040,23 @@ async function rebuildInlineNodes(
 
   inlineNodes.value = rendered.nodes
   await nextTick()
-  restoreFocusSnapshot(focusSnapshot ?? null)
+  restoreFocusSnapshot(contentRoot.value, focusSnapshot ?? null)
 
-  if (recordInitializedDuringRender) {
-    emitRecordUpdate()
-  }
+  if (recordInitializedDuringRender) emitRecordUpdate()
 }
 
 async function parseAndBuild() {
   const currentRequestId = ++buildRequestId
   const currentInlineRequestId = ++inlineBuildRequestId
-
   try {
     renderError.value = ""
     const extracted = parseAndExtract(props.content || "")
-    if (currentRequestId !== buildRequestId) {
-      return
-    }
+    if (currentRequestId !== buildRequestId) return
 
     clientAssigners.value = extracted.client_assigner || []
     emit("fields-change", extracted)
 
-    const defaultsChanged = ensureDefaultsFromFields(extracted)
+    const defaultsChanged = ensureDefaultsFromFields(localRecord, extracted)
     const assignerChanged = applyCurrentClientAssigners()
     if (defaultsChanged || assignerChanged) {
       emitRecordUpdate()
@@ -1575,11 +1076,15 @@ async function parseAndBuild() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Watchers
+// ---------------------------------------------------------------------------
+
 watch(
   () => props.modelValue,
   (value) => {
     syncingFromExternal = true
-    applyIncomingRecord(value)
+    applyIncomingRecord(localRecord, value)
     syncingFromExternal = false
     if (applyCurrentClientAssigners()) {
       emitRecordUpdate()
@@ -1625,6 +1130,7 @@ defineExpose({
   --rec-muted: #667085;
   --rec-border: #e3e8ef;
   --rec-focus: #2f6fed;
+  --rec-error: #e03050;
   --rec-var-control-height: 30px;
   --rec-var-single-line-height: 1.2;
   --rec-var-text-wrap-line-height: 1.35;
@@ -1658,71 +1164,26 @@ defineExpose({
   text-align: center;
 }
 
-.aimd-protocol-recorder__content :deep(h1) {
-  margin: 0.45em 0 0.5em;
-  font-size: 1.7em;
-  line-height: 1.25;
-}
-
-.aimd-protocol-recorder__content :deep(h2) {
-  margin: 0.8em 0 0.45em;
-  font-size: 1.35em;
-  line-height: 1.3;
-}
-
-.aimd-protocol-recorder__content :deep(h3) {
-  margin: 0.7em 0 0.4em;
-  font-size: 1.15em;
-}
-
-.aimd-protocol-recorder__content :deep(p) {
-  margin: 0.45em 0;
-  color: var(--rec-text);
-}
-
+/* ── Typography ─────────────────────────────────────────────────────────── */
+.aimd-protocol-recorder__content :deep(h1) { margin: 0.45em 0 0.5em; font-size: 1.7em; line-height: 1.25; }
+.aimd-protocol-recorder__content :deep(h2) { margin: 0.8em 0 0.45em; font-size: 1.35em; line-height: 1.3; }
+.aimd-protocol-recorder__content :deep(h3) { margin: 0.7em 0 0.4em; font-size: 1.15em; }
+.aimd-protocol-recorder__content :deep(p) { margin: 0.45em 0; color: var(--rec-text); }
 .aimd-protocol-recorder__content :deep(ul),
-.aimd-protocol-recorder__content :deep(ol) {
-  margin: 0.35em 0;
-  padding-left: 22px;
-}
-
-.aimd-protocol-recorder__content :deep(table) {
-  border-collapse: collapse;
-  margin: 10px 0;
-  font-size: 14px;
-}
-
+.aimd-protocol-recorder__content :deep(ol) { margin: 0.35em 0; padding-left: 22px; }
+.aimd-protocol-recorder__content :deep(table) { border-collapse: collapse; margin: 10px 0; font-size: 14px; }
 .aimd-protocol-recorder__content :deep(th),
-.aimd-protocol-recorder__content :deep(td) {
-  border: 1px solid #e2e8f0;
-  padding: 6px 10px;
-  text-align: left;
-}
+.aimd-protocol-recorder__content :deep(td) { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
+.aimd-protocol-recorder__content :deep(th) { background: #f8fafc; }
+.aimd-protocol-recorder__content :deep(blockquote) { margin: 8px 0; padding: 8px 12px; border-left: 3px solid #d8dee8; color: #666; background: #fafbfc; }
+.aimd-protocol-recorder__content :deep(code) { background: #f0f2f5; border-radius: 4px; padding: 2px 5px; }
 
-.aimd-protocol-recorder__content :deep(th) {
-  background: #f8fafc;
-}
-
-.aimd-protocol-recorder__content :deep(blockquote) {
-  margin: 8px 0;
-  padding: 8px 12px;
-  border-left: 3px solid #d8dee8;
-  color: #666;
-  background: #fafbfc;
-}
-
-.aimd-protocol-recorder__content :deep(code) {
-  background: #f0f2f5;
-  border-radius: 4px;
-  padding: 2px 5px;
-}
-
+/* ── Field base ─────────────────────────────────────────────────────────── */
 .aimd-protocol-recorder__content :deep(.aimd-field) {
   border-radius: 10px;
   margin: 6px 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
-
 .aimd-protocol-recorder__content :deep(.aimd-field__scope) {
   border-radius: 6px;
   padding: 1px 7px;
@@ -1732,63 +1193,22 @@ defineExpose({
   text-transform: lowercase;
 }
 
-.aimd-protocol-recorder__content :deep(.aimd-field--var) {
-  background: #f3f8ff;
-  border-color: #c9dcff;
-  color: #1c4e90;
-}
+/* ── Field colours ──────────────────────────────────────────────────────── */
+.aimd-protocol-recorder__content :deep(.aimd-field--var) { background: #f3f8ff; border-color: #c9dcff; color: #1c4e90; }
+.aimd-protocol-recorder__content :deep(.aimd-field--var .aimd-field__scope) { background: #dceaff; color: #255eab; }
+.aimd-protocol-recorder__content :deep(.aimd-field--step) { background: #fff9ef; border-color: #f4d9a8; color: #9a5800; }
+.aimd-protocol-recorder__content :deep(.aimd-field--step .aimd-field__scope) { background: #ffe8bf; color: #9a5800; }
+.aimd-protocol-recorder__content :deep(.aimd-field--check) { background: #f8fafc; border-color: #d8dfe8; color: #2b3443; padding: 3px 8px; }
+.aimd-protocol-recorder__content :deep(.aimd-field--check .aimd-field__scope) { background: #e7ecf3; color: #4f5f77; }
+.aimd-protocol-recorder__content :deep(.aimd-field--var-table) { background: #f3fbf3; border: 1px solid #cfe7cf; color: #276738; border-radius: 12px; padding: 10px 12px; }
+.aimd-protocol-recorder__content :deep(.aimd-field--var-table .aimd-field__scope) { background: #daf1dc; color: #2f7b40; }
+/* ── Error & loading ────────────────────────────────────────────────────── */
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--error) { border-color: var(--rec-error) !important; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--error:focus-within) { box-shadow: 0 0 0 2px rgba(224, 48, 80, 0.12); }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--loading) { opacity: 0.6; pointer-events: none; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-table-cell-input--error) { border-color: var(--rec-error) !important; }
 
-.aimd-protocol-recorder__content :deep(.aimd-field--var .aimd-field__scope) {
-  background: #dceaff;
-  color: #255eab;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-ref--var .aimd-field--var) {
-  background: #e3f2fd;
-  border-color: #90caf9;
-  color: #1565c0;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-ref--var .aimd-field__value) {
-  color: #1565c0;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-field--step) {
-  background: #fff9ef;
-  border-color: #f4d9a8;
-  color: #9a5800;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-field--step .aimd-field__scope) {
-  background: #ffe8bf;
-  color: #9a5800;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-field--check) {
-  background: #f8fafc;
-  border-color: #d8dfe8;
-  color: #2b3443;
-  padding: 3px 8px;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-field--check .aimd-field__scope) {
-  background: #e7ecf3;
-  color: #4f5f77;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-field--var-table) {
-  background: #f3fbf3;
-  border: 1px solid #cfe7cf;
-  color: #276738;
-  border-radius: 12px;
-  padding: 10px 12px;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-field--var-table .aimd-field__scope) {
-  background: #daf1dc;
-  color: #2f7b40;
-}
-
+/* ── Inline layout ──────────────────────────────────────────────────────── */
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline) {
   display: inline-flex;
   align-items: center;
@@ -1796,11 +1216,7 @@ defineExpose({
   margin: 5px 3px;
   vertical-align: middle;
 }
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-multiline) {
-  align-items: flex-start;
-}
-
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-multiline) { align-items: flex-start; }
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked) {
   flex-direction: column;
   align-items: stretch;
@@ -1815,50 +1231,18 @@ defineExpose({
   box-shadow: none;
   background: #f7fbff;
 }
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked--textarea) {
-  min-width: 0;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked--checkbox) {
-  width: fit-content;
-  min-width: 0;
-}
-
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked--textarea) { min-width: 0; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked--checkbox) { width: fit-content; min-width: 0; }
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked:focus-within) {
   border-color: var(--aimd-border-color-focus, #4181fd);
   box-shadow: 0 0 0 2px rgba(65, 129, 253, 0.14);
 }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field) { margin: 0; box-shadow: none; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field--no-style.aimd-field__label) { min-height: 30px; border-radius: 6px 6px 0 0; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field__scope) { align-self: center; height: 22px; margin-left: 3px; padding: 0 7px; border-radius: 6px; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field__id) { display: flex; flex: 1; align-items: center; padding: 0 10px 0 6px; font-size: 13px; font-weight: 500; color: #1565c0; white-space: nowrap; }
 
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field) {
-  margin: 0;
-  box-shadow: none;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field--no-style.aimd-field__label) {
-  min-height: 30px;
-  border-radius: 6px 6px 0 0;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field__scope) {
-  align-self: center;
-  height: 22px;
-  margin-left: 3px;
-  padding: 0 7px;
-  border-radius: 6px;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field__id) {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  padding: 0 10px 0 6px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #1565c0;
-  white-space: nowrap;
-}
-
+/* ── Stacked input controls ─────────────────────────────────────────────── */
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline__input--stacked) {
   width: 100%;
   min-width: 0;
@@ -1874,12 +1258,7 @@ defineExpose({
   padding: 0 10px;
   background: #fff;
 }
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input--stacked:focus) {
-  border-color: var(--aimd-border-color, #90caf9);
-  box-shadow: none;
-}
-
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input--stacked:focus) { border-color: var(--aimd-border-color, #90caf9); box-shadow: none; }
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea--stacked:not(.aimd-rec-inline__textarea--stacked-text)) {
   width: 100%;
   min-width: 0;
@@ -1895,12 +1274,7 @@ defineExpose({
   padding: 8px 10px;
   background: #fff;
 }
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea--stacked:focus) {
-  border-color: var(--aimd-border-color, #90caf9);
-  box-shadow: none;
-}
-
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea--stacked:focus) { border-color: var(--aimd-border-color, #90caf9); box-shadow: none; }
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline__checkbox-row) {
   display: flex;
   align-items: center;
@@ -1910,44 +1284,18 @@ defineExpose({
   background: #fff;
 }
 
+/* ── Select ─────────────────────────────────────────────────────────────── */
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__select) { appearance: auto; cursor: pointer; height: var(--rec-var-control-height); padding: 0 8px; background: #fff; }
+
+/* ── Step / check ───────────────────────────────────────────────────────── */
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline--step),
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--check) {
-  gap: 8px;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--quiz) {
-  display: block;
-  margin: 12px 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--quiz.aimd-field--quiz) {
-  border-radius: 12px;
-  border-color: #f6ddb0;
-  background: #fffdf6;
-  padding: 10px 12px;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__check-wrap) {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__step-num) {
-  font-weight: 600;
-  color: #9a5800;
-}
-
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--check) { gap: 8px; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--quiz) { display: block; margin: 12px 0; padding: 0; border: none; background: transparent; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--quiz.aimd-field--quiz) { border-radius: 12px; border-color: #f6ddb0; background: #fffdf6; padding: 10px 12px; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__check-wrap) { display: inline-flex; align-items: center; gap: 6px; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__step-num) { font-weight: 600; color: #9a5800; }
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline input[type="checkbox"]),
-.aimd-protocol-recorder__content :deep(.aimd-checkbox) {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--rec-focus);
-}
-
+.aimd-protocol-recorder__content :deep(.aimd-checkbox) { width: 16px; height: 16px; accent-color: var(--rec-focus); }
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline__input) {
   height: 30px;
   min-width: 94px;
@@ -1960,101 +1308,12 @@ defineExpose({
   color: var(--rec-text);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input::placeholder) {
-  color: #98a2b3;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input:focus) {
-  border-color: var(--rec-focus);
-  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.12);
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var .aimd-rec-inline__input) {
-  width: clamp(120px, 28vw, 280px);
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input--annotation) {
-  width: clamp(130px, 24vw, 220px);
-}
-
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input::placeholder) { color: #98a2b3; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input:focus) { border-color: var(--rec-focus); box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.12); }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var .aimd-rec-inline__input) { width: clamp(120px, 28vw, 280px); }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input--annotation) { width: clamp(130px, 24vw, 220px); }
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline__input.aimd-rec-inline__input--stacked),
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked) {
-  font-family: inherit;
-  font-size: inherit;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea) {
-  width: clamp(180px, 34vw, 420px);
-  min-height: 78px;
-  padding: 8px 10px;
-  border: 1px solid #c8d3e1;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.45;
-  outline: none;
-  resize: vertical;
-  box-sizing: border-box;
-  color: var(--rec-text);
-  background: #fff;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea:focus) {
-  border-color: var(--rec-focus);
-  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.12);
-}
-
-/* Keep stacked var input borderless inside; only outer wrapper should show border/focus */
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input.aimd-rec-inline__input--stacked),
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked) {
-  width: 100%;
-  min-width: 0;
-  border: 0 none;
-  border-top: 1px solid var(--aimd-border-color, #90caf9);
-  border-radius: 0 0 6px 6px;
-  box-shadow: none;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked:not(.aimd-rec-inline__textarea--stacked-text)) {
-  min-height: 82px;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked-text) {
-  min-height: 0;
-  padding-top: 4px;
-  padding-bottom: 4px;
-  line-height: var(--rec-var-text-wrap-line-height);
-  resize: none;
-  overflow-y: hidden;
-  overflow-x: hidden;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__input.aimd-rec-inline__input--stacked:focus),
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked:focus) {
-  border-color: transparent;
-  border-top-color: var(--aimd-border-color, #90caf9);
-  box-shadow: none;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline-table) {
-  display: block;
-  width: 100%;
-  max-width: none;
-  margin: 12px 0 14px;
-}
-
-.aimd-protocol-recorder__content :deep(.aimd-rec-inline-table__table) {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  overflow: hidden;
-  border-radius: 8px;
-}
-
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline__textarea.aimd-rec-inline__textarea--stacked) { font-family: inherit; outline: none; }
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline-table__table td) {
   vertical-align: middle;
   transition:
