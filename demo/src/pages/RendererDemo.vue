@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, type VNode } from 'vue'
 import { renderToHtml, renderToVue, parseAndExtract } from '@airalogy/aimd-renderer'
+import DemoAimdSourceEditor from '../components/DemoAimdSourceEditor.vue'
 import { useDemoLocale, useDemoMessages } from '../composables/demoI18n'
 import { useSampleContent } from '../composables/sampleContent'
 import '@airalogy/aimd-recorder/styles'
@@ -47,12 +48,8 @@ watch([input, locale], render, { immediate: true })
 
     <div class="demo-layout">
       <div class="panel">
-        <h3 class="panel-title">{{ messages.common.inputAimd }}</h3>
-        <textarea
-          v-model="input"
-          class="code-input"
-          spellcheck="false"
-        />
+        <h3 class="panel-title">{{ messages.common.aimdSource }}</h3>
+        <DemoAimdSourceEditor v-model="input" :min-height="500" />
       </div>
 
       <div class="panel">
@@ -167,20 +164,6 @@ watch([input, locale], render, { immediate: true })
   color: #1a73e8;
   border-bottom-color: #1a73e8;
   font-weight: 600;
-}
-
-.code-input {
-  width: 100%;
-  min-height: 500px;
-  padding: 16px;
-  border: none;
-  outline: none;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  resize: vertical;
-  background: #fff;
-  color: #333;
 }
 
 .render-preview {

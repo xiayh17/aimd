@@ -6,6 +6,7 @@ import {
   type AimdProtocolRecordData,
 } from '@airalogy/aimd-recorder'
 import '@airalogy/aimd-recorder/styles'
+import DemoAimdSourceEditor from '../components/DemoAimdSourceEditor.vue'
 import { useDemoLocale, useDemoMessages } from '../composables/demoI18n'
 import { useSampleContent } from '../composables/sampleContent'
 
@@ -28,8 +29,8 @@ const collectedJson = computed(() => JSON.stringify(recordData.value, null, 2))
 
     <div class="demo-layout">
       <div class="panel">
-        <h3 class="panel-title">{{ messages.common.aimdSourceText }}</h3>
-        <textarea v-model="input" class="code-input" spellcheck="false" />
+        <h3 class="panel-title">{{ messages.common.aimdSource }}</h3>
+        <DemoAimdSourceEditor v-model="input" :min-height="500" />
       </div>
 
       <div class="panel">
@@ -126,20 +127,6 @@ const collectedJson = computed(() => JSON.stringify(recordData.value, null, 2))
 .reset-btn:hover {
   border-color: #d03050;
   color: #d03050;
-}
-
-.code-input {
-  width: 100%;
-  min-height: 500px;
-  padding: 16px;
-  border: none;
-  outline: none;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  resize: vertical;
-  background: #fff;
-  color: #333;
 }
 
 .form-content {

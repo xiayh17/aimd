@@ -5,6 +5,7 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
 import type { VFile } from 'vfile'
+import DemoAimdSourceEditor from '../components/DemoAimdSourceEditor.vue'
 import { useDemoMessages } from '../composables/demoI18n'
 import { useSampleContent } from '../composables/sampleContent'
 
@@ -46,12 +47,8 @@ watch(input, parseContent, { immediate: true })
 
     <div class="demo-layout">
       <div class="panel">
-        <h3 class="panel-title">{{ messages.common.inputAimd }}</h3>
-        <textarea
-          v-model="input"
-          class="code-input"
-          spellcheck="false"
-        />
+        <h3 class="panel-title">{{ messages.common.aimdSource }}</h3>
+        <DemoAimdSourceEditor v-model="input" :min-height="400" />
       </div>
 
       <div class="panel">
@@ -111,20 +108,6 @@ watch(input, parseContent, { immediate: true })
   background: #fafafa;
   border-bottom: 1px solid #e8e8e8;
   color: #444;
-}
-
-.code-input {
-  width: 100%;
-  min-height: 400px;
-  padding: 16px;
-  border: none;
-  outline: none;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  resize: vertical;
-  background: #fff;
-  color: #333;
 }
 
 .code-output {

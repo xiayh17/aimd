@@ -54,8 +54,7 @@ export interface DemoMessages {
     recorder: string
   }
   common: {
-    inputAimd: string
-    aimdSourceText: string
+    aimdSource: string
     extractedFields: string
     htmlSource: string
     astOutput: string
@@ -76,7 +75,6 @@ export interface DemoMessages {
         check: string
         refs: string
       }
-      editorTitle: string
       tabs: {
         preview: string
         form: string
@@ -126,8 +124,7 @@ const BASE_DEMO_MESSAGES: Record<DemoLocale, DemoMessages> = {
       recorder: 'Recorder',
     },
     common: {
-      inputAimd: 'Input (AIMD Markdown)',
-      aimdSourceText: 'AIMD Source Text',
+      aimdSource: 'AIMD Source',
       extractedFields: 'Extracted Fields (ExtractedAimdFields)',
       htmlSource: 'HTML Source',
       astOutput: 'AST Output (MDAST)',
@@ -148,7 +145,6 @@ const BASE_DEMO_MESSAGES: Record<DemoLocale, DemoMessages> = {
           check: 'Checks',
           refs: 'Refs',
         },
-        editorTitle: 'AIMD Editor',
         tabs: {
           preview: 'Preview',
           form: 'Fill Data',
@@ -156,13 +152,13 @@ const BASE_DEMO_MESSAGES: Record<DemoLocale, DemoMessages> = {
         },
       },
       core: {
-        desc: 'AIMD core parser that converts AIMD Markdown into AST and extracted field metadata',
+        desc: 'AIMD core parser that converts AIMD source into AST and extracted field metadata',
       },
       editor: {
         desc: 'AIMD Editor with source mode, WYSIWYG mode, and localized built-in UI',
       },
       renderer: {
-        desc: 'AIMD rendering engine that renders AIMD Markdown into HTML and Vue VNodes',
+        desc: 'AIMD rendering engine that renders AIMD source into HTML and Vue VNodes',
         tabs: {
           html: 'HTML Render',
           vue: 'Vue VNodes',
@@ -196,8 +192,7 @@ const BASE_DEMO_MESSAGES: Record<DemoLocale, DemoMessages> = {
       recorder: 'Recorder 记录器',
     },
     common: {
-      inputAimd: '输入 (AIMD Markdown)',
-      aimdSourceText: 'AIMD 源文本',
+      aimdSource: 'AIMD 源码',
       extractedFields: '提取的字段 (ExtractedAimdFields)',
       htmlSource: 'HTML 源码',
       astOutput: 'AST 输出 (MDAST)',
@@ -218,7 +213,6 @@ const BASE_DEMO_MESSAGES: Record<DemoLocale, DemoMessages> = {
           check: '检查',
           refs: '引用',
         },
-        editorTitle: 'AIMD 编辑器',
         tabs: {
           preview: '渲染预览',
           form: '填写数据',
@@ -226,13 +220,13 @@ const BASE_DEMO_MESSAGES: Record<DemoLocale, DemoMessages> = {
         },
       },
       core: {
-        desc: 'AIMD 核心解析器 — 将 AIMD Markdown 解析为 AST 并提取字段信息',
+        desc: 'AIMD 核心解析器 — 将 AIMD 源码解析为 AST 并提取字段信息',
       },
       editor: {
         desc: 'AIMD Editor — 支持 Source mode / WYSIWYG mode 与内建 UI 双语切换',
       },
       renderer: {
-        desc: 'AIMD 渲染引擎 — 将 AIMD Markdown 渲染为 HTML 和 Vue VNodes',
+        desc: 'AIMD 渲染引擎 — 将 AIMD 源码渲染为 HTML 和 Vue VNodes',
         tabs: {
           html: 'HTML 渲染',
           vue: 'Vue VNodes',

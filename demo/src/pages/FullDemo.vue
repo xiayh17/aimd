@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onBeforeUnmount, shallowRef } from 'vue'
-import { useMonaco } from '../composables/useMonaco'
+import { ref, watch, computed } from 'vue'
 import { renderToHtml, parseAndExtract } from '@airalogy/aimd-renderer'
 import {
   AimdProtocolRecorder,
@@ -8,49 +7,12 @@ import {
   type AimdProtocolRecordData,
 } from '@airalogy/aimd-recorder'
 import '@airalogy/aimd-recorder/styles'
+import DemoAimdSourceEditor from '../components/DemoAimdSourceEditor.vue'
 import { useDemoLocale, useDemoMessages } from '../composables/demoI18n'
 import { useSampleContent } from '../composables/sampleContent'
-
-// --- Monaco Editor ---
-const editorContainer = ref<HTMLElement | null>(null)
-const { monaco, loading, init } = useMonaco()
-const editor = shallowRef<any>(null)
 const { locale } = useDemoLocale()
 const messages = useDemoMessages()
 const content = useSampleContent()
-
-onMounted(async () => {
-  await init()
-  if (monaco.value && editorContainer.value) {
-    editor.value = monaco.value.editor.create(editorContainer.value, {
-      value: content.value,
-      language: 'aimd',
-      theme: 'aimd-light',
-      minimap: { enabled: false },
-      fontSize: 13,
-      lineNumbers: 'on',
-      wordWrap: 'on',
-      scrollBeyondLastLine: false,
-      automaticLayout: true,
-      tabSize: 2,
-      padding: { top: 8 },
-    })
-
-    editor.value.onDidChangeModelContent(() => {
-      content.value = editor.value.getValue()
-    })
-  }
-})
-
-onBeforeUnmount(() => {
-  editor.value?.dispose()
-})
-
-watch(content, (value) => {
-  if (editor.value && editor.value.getValue() !== value) {
-    editor.value.setValue(value)
-  }
-})
 
 // --- Preview ---
 const htmlOutput = ref('')
@@ -59,7 +21,6 @@ const renderError = ref('')
 
 // --- Record Data ---
 const recordData = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
-const recorderRef = ref<{ runManualClientAssigners?: () => boolean } | null>(null)
 
 // Active panel on the right side
 const activeRightTab = ref<'preview' | 'form' | 'data'>('preview')
@@ -118,11 +79,10 @@ function resetForm() {
     </div>
 
     <div class="main-layout">
-      <!-- Left: Monaco Editor -->
+      <!-- Left: AIMD Editor -->
       <div class="panel editor-panel">
-        <h3 class="panel-title">{{ messages.pages.full.editorTitle }}</h3>
-        <div v-if="loading" class="loading">{{ messages.common.loadingEditor }}</div>
-        <div ref="editorContainer" class="editor-container" />
+        <h3 class="panel-title">{{ messages.common.aimdSource }}</h3>
+        <DemoAimdSourceEditor v-model="content" :min-height="560" />
       </div>
 
       <!-- Right: Preview / Form / Data -->
@@ -234,15 +194,9 @@ function resetForm() {
   flex-shrink: 0;
 }
 
-.editor-container {
+.editor-panel :deep(.demo-aimd-source-editor) {
   flex: 1;
   min-height: 0;
-}
-
-.loading {
-  padding: 40px;
-  text-align: center;
-  color: #888;
 }
 
 .tab-bar {
