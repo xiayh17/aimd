@@ -82,5 +82,37 @@ const { html } = await renderToHtml("{{quiz|q1}}", {
 })
 ```
 
+### Host Custom Elements
+
+When integrating AIMD into a host application with its own preview components, use `aimdElementRenderers` to replace the default HTML for specific AIMD nodes:
+
+```ts
+import {
+  createCustomElementAimdRenderer,
+  renderToHtml,
+} from "@airalogy/aimd-renderer"
+
+const { html } = await renderToHtml("{{step|verify, 2, title='Verify Output', check=True}}", {
+  groupStepBodies: true,
+  aimdElementRenderers: {
+    step: createCustomElementAimdRenderer("step-card", (node) => {
+      const stepNode = node as any
+      return {
+        "step-id": stepNode.id,
+        "step-number": stepNode.step,
+        title: stepNode.title,
+        level: String(stepNode.level),
+        "has-check": stepNode.check ? "true" : undefined,
+      }
+    }, {
+      container: true,
+      stripDefaultChildren: true,
+    }),
+  },
+})
+```
+
+Set `groupStepBodies: true` when the host element should receive following block content as slot/body children. The default AIMD metadata (`data-aimd-*`) is preserved, and step nodes now preserve parsed kwargs like `title`, `subtitle`, `checked_message`, and `result` for host-side adapters.
+
 Math styles are loaded automatically when calling async render APIs (`renderToHtml` / `renderToVue`) in browser environments.
 If you need full control of style loading, import `@airalogy/aimd-renderer/styles` manually.

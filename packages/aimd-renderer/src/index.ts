@@ -6,6 +6,7 @@
 
 // Common exports
 export {
+  createCustomElementAimdRenderer,
   createHtmlProcessor,
   createRenderer,
   defaultRenderer,
@@ -66,7 +67,14 @@ export type {
 } from '@airalogy/aimd-core/types'
 
 // Re-export RenderResult from processor
-export type { AimdAssignerVisibility, AimdRendererOptions, RenderResult } from './common/processor'
+export type {
+  AimdAssignerVisibility,
+  AimdHtmlNodeRenderer,
+  AimdHtmlRendererContext,
+  CustomElementAimdRendererOptions,
+  AimdRendererOptions,
+  RenderResult,
+} from './common/processor'
 export type {
   AimdRendererI18nOptions,
   AimdRendererLocale,

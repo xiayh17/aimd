@@ -126,7 +126,10 @@ export function parseStepContent(content: string): {
   id: string
   level: number
   check: boolean
+  title?: string
+  subtitle?: string
   checkedMessage?: string
+  result?: boolean
   props: Record<string, string | boolean | number>
 } {
   const trimmed = content.trim()
@@ -134,7 +137,10 @@ export function parseStepContent(content: string): {
   const id = parts[0].trim()
   let level = 1
   let check = false
+  let title: string | undefined
+  let subtitle: string | undefined
   let checkedMessage: string | undefined
+  let result = false
 
   for (let i = 1; i < parts.length; i++) {
     const part = parts[i].trim()
@@ -148,8 +154,17 @@ export function parseStepContent(content: string): {
     if ("check" in kvParams) {
       check = Boolean(kvParams.check)
     }
+    if ("title" in kvParams) {
+      title = String(kvParams.title)
+    }
+    if ("subtitle" in kvParams) {
+      subtitle = String(kvParams.subtitle)
+    }
     if ("checked_message" in kvParams) {
       checkedMessage = String(kvParams.checked_message)
+    }
+    if ("result" in kvParams) {
+      result = Boolean(kvParams.result)
     }
     if ("level" in kvParams) {
       level = Number(kvParams.level)
@@ -160,7 +175,7 @@ export function parseStepContent(content: string): {
 
   const props = parseKeyValueParams(trimmed)
 
-  return { id, level, check, checkedMessage, props }
+  return { id, level, check, title, subtitle, checkedMessage, result, props }
 }
 
 /**

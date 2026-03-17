@@ -154,8 +154,16 @@ export interface AimdStepNode extends BaseNode {
   hasChildren?: boolean
   /** Whether this step has a checkbox (check=True in AIMD) */
   check?: boolean
+  /** Explicit title declared in AIMD step kwargs. */
+  title?: string
+  /** Optional subtitle declared in AIMD step kwargs. */
+  subtitle?: string
   /** Message to display when step is checked */
   checkedMessage?: string
+  /** Whether this step should be treated as a result/output step. */
+  result?: boolean
+  /** Preserved step kwargs for host-side render adapters. */
+  props?: Record<string, string | boolean | number>
   /** Parent node reference (for hierarchy) */
   parent?: IndentNode
 }

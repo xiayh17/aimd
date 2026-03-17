@@ -212,6 +212,17 @@ test('step: with checked_message', () => {
   assert.equal(node?.checkedMessage, 'Done!')
 })
 
+test('step: preserves title, subtitle, result, and props for host renderers', () => {
+  const { tree } = parseAimd("{{step|verify, 2, title='Verify Output', subtitle='Cross-check values', result=True}}")
+  const node = findAimdNode(tree)
+  assert.equal(node?.title, 'Verify Output')
+  assert.equal(node?.subtitle, 'Cross-check values')
+  assert.equal(node?.result, true)
+  assert.equal(node?.props?.title, 'Verify Output')
+  assert.equal(node?.props?.subtitle, 'Cross-check values')
+  assert.equal(node?.props?.result, true)
+})
+
 test('step: level clamped to max 3', () => {
   const { tree } = parseAimd('{{step|deep, 5}}')
   const node = findAimdNode(tree)

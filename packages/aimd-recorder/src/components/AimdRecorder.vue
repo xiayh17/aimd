@@ -20,6 +20,7 @@ import {
 import type {
   AimdFieldMeta,
   AimdFieldState,
+  AimdRecorderFieldAdapters,
   AimdProtocolRecordData,
   FieldEventPayload,
   TableEventPayload,
@@ -42,6 +43,7 @@ import {
 import type { FocusSnapshot } from "../composables/useFocusManagement"
 import { normalizeDnaSequenceValue } from "../composables/useDnaSequence"
 import { useClientAssignerRunner } from "../composables/useClientAssignerRunner"
+import { resolveAimdRecorderFieldVNode } from "../composables/useFieldAdapters"
 import { useVarTableDragDrop, getVarTableColumns } from "../composables/useVarTableDragDrop"
 import { useFieldRendering } from "../composables/useFieldRendering"
 import AimdVarField from "./AimdVarField.vue"
@@ -94,6 +96,12 @@ const props = withDefaults(defineProps<{
   customRenderers?: Partial<Record<string, AimdComponentRenderer>>
 
   /**
+   * Host-level field adapters with full recorder context.
+   * Prefer this over `customRenderers` for new integrations.
+   */
+  fieldAdapters?: AimdRecorderFieldAdapters
+
+  /**
    * Resolves relative paths / Airalogy file IDs to displayable URLs.
    * Reserved for future file-type field support.
    */
@@ -109,6 +117,7 @@ const props = withDefaults(defineProps<{
   fieldState: undefined,
   wrapField: undefined,
   customRenderers: undefined,
+  fieldAdapters: undefined,
   resolveFile: undefined,
 })
 
@@ -157,6 +166,25 @@ let pendingInlineBuildRequestId: number | null = null
 
 const resolvedLocale = computed(() => resolveAimdRecorderLocale(props.locale))
 const resolvedMessages = computed(() => createAimdRecorderMessages(resolvedLocale.value, props.messages))
+
+function applyFieldAdapter<TFieldType extends "var" | "var_table" | "step" | "check" | "quiz">(
+  fieldType: TFieldType,
+  fieldKey: string,
+  node: any,
+  value: unknown,
+  defaultVNode: VNode,
+): VNode {
+  return resolveAimdRecorderFieldVNode(fieldType, fieldKey, node, value, defaultVNode, {
+    fieldAdapters: props.fieldAdapters,
+    wrapField: props.wrapField,
+    readonly: props.readonly,
+    locale: resolvedLocale.value,
+    messages: resolvedMessages.value,
+    record: localRecord,
+    fieldMeta: props.fieldMeta,
+    fieldState: props.fieldState,
+  })
+}
 
 const EMPTY_FIELDS: ExtractedAimdFields = {
   var: [],
@@ -246,7 +274,7 @@ function renderInlineVar(node: AimdVarNode): VNode {
   // 1. Custom renderer override
   if (props.customRenderers?.var) {
     const custom = props.customRenderers.var(node, {} as any, [])
-    if (custom) return fieldRendering.maybeWrap(fieldKey, "var", custom as VNode)
+    if (custom) return applyFieldAdapter("var", fieldKey, node, localRecord.var[id], custom as VNode)
   }
 
   const type = node.definition?.type || "str"
@@ -306,7 +334,7 @@ function renderInlineVar(node: AimdVarNode): VNode {
     },
   })
 
-  return fieldRendering.maybeWrap(fieldKey, "var", vnode)
+  return applyFieldAdapter("var", fieldKey, node, localRecord.var[id], vnode)
 }
 
 function renderInlineVarTable(node: AimdVarTableNode): VNode {
@@ -316,7 +344,7 @@ function renderInlineVarTable(node: AimdVarTableNode): VNode {
   const rows = tableDragDrop.ensureVarTableRows(tableName, columns)
   const disabled = fieldRendering.isFieldDisabled(fieldKey)
 
-  return h(AimdVarTableField, {
+  const vnode = h(AimdVarTableField, {
     node,
     rows,
     columns,
@@ -357,6 +385,8 @@ function renderInlineVarTable(node: AimdVarTableNode): VNode {
       tableDragDrop.endVarTableRowDrag()
     },
   })
+
+  return applyFieldAdapter("var_table", fieldKey, node, rows, vnode)
 }
 
 function renderInlineStep(node: AimdStepNode): VNode {
@@ -391,7 +421,7 @@ function renderInlineStep(node: AimdStepNode): VNode {
     },
   })
 
-  return fieldRendering.maybeWrap(fieldKey, "step", vnode)
+  return applyFieldAdapter("step", fieldKey, node, state, vnode)
 }
 
 function renderInlineCheck(node: AimdCheckNode): VNode {
@@ -426,7 +456,7 @@ function renderInlineCheck(node: AimdCheckNode): VNode {
     },
   })
 
-  return fieldRendering.maybeWrap(fieldKey, "check", vnode)
+  return applyFieldAdapter("check", fieldKey, node, state, vnode)
 }
 
 function renderInlineQuiz(node: AimdQuizNode): VNode {
@@ -449,7 +479,7 @@ function renderInlineQuiz(node: AimdQuizNode): VNode {
     localRecord.quiz[quizId] = getQuizDefaultValue(quizField)
   }
 
-  return fieldRendering.maybeWrap(fieldKey, "quiz", h(AimdQuizRecorder, {
+  const vnode = h(AimdQuizRecorder, {
     class: "aimd-rec-inline aimd-rec-inline--quiz",
     quiz: quizField,
     modelValue: localRecord.quiz[quizId],
@@ -462,7 +492,9 @@ function renderInlineQuiz(node: AimdQuizNode): VNode {
       markRecordChanged()
       emit("field-change", { section: "quiz", fieldKey: quizId, value })
     },
-  }))
+  })
+
+  return applyFieldAdapter("quiz", fieldKey, node, localRecord.quiz[quizId], vnode)
 }
 
 // ---------------------------------------------------------------------------

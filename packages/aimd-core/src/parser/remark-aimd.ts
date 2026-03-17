@@ -86,7 +86,7 @@ function createAimdNode(
     }
 
     case "step": {
-      const { id, level, check, checkedMessage } = parseStepContent(content)
+      const { id, level, check, title, subtitle, checkedMessage, result, props } = parseStepContent(content)
       const stepNode: AimdStepNode = {
         type: "aimd",
         fieldType: "step",
@@ -98,10 +98,20 @@ function createAimdNode(
         step: "1",
         hasChildren: false,
         check,
+        props,
       }
 
+      if (title) {
+        stepNode.title = title
+      }
+      if (subtitle) {
+        stepNode.subtitle = subtitle
+      }
       if (checkedMessage) {
-        ;(stepNode as any).checkedMessage = checkedMessage
+        stepNode.checkedMessage = checkedMessage
+      }
+      if (result) {
+        stepNode.result = true
       }
 
       if (stepContext) {

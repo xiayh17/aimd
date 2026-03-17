@@ -2,10 +2,12 @@ import type { Element, Properties, Root as HastRoot, Text as HastText } from "ha
 import type { VFile } from "vfile"
 import type { VNode } from "vue"
 import type {
+  AimdFieldType,
   AimdNode,
   AimdQuizNode,
   AimdStepNode,
   ProcessorOptions,
+  RenderContext,
 } from "@airalogy/aimd-core/types"
 import type { ExtractedAimdFields } from "@airalogy/aimd-core/types"
 import type { AimdRendererI18nOptions } from "../locales"
@@ -35,8 +37,191 @@ export interface RenderResult {
 
 export type AimdAssignerVisibility = "hidden" | "collapsed" | "expanded"
 
+export interface AimdHtmlRendererContext extends RenderContext {
+  locale: NonNullable<AimdRendererI18nOptions["locale"]> | string
+  messages: ReturnType<typeof createAimdRendererMessages>
+}
+
+export type AimdHtmlNodeRenderer = (
+  node: AimdNode,
+  defaultElement: Element,
+  context: AimdHtmlRendererContext,
+) => Element | null | undefined
+
 export interface AimdRendererOptions extends ProcessorOptions, AimdRendererI18nOptions {
   assignerVisibility?: AimdAssignerVisibility
+  aimdElementRenderers?: Partial<Record<AimdFieldType, AimdHtmlNodeRenderer>>
+  groupStepBodies?: boolean
+}
+
+export interface CustomElementAimdRendererOptions {
+  container?: boolean
+  stripDefaultChildren?: boolean
+}
+
+function assignAimdNodeData(element: Element, node: AimdNode): Element {
+  const existingData = (element as any).data || {}
+  ;(element as any).data = {
+    ...existingData,
+    aimd: node,
+  }
+  return element
+}
+
+function cleanProperties(properties: Properties): Properties {
+  return Object.fromEntries(
+    Object.entries(properties).filter(([, value]) => value !== undefined && value !== null),
+  ) as Properties
+}
+
+export function createCustomElementAimdRenderer(
+  tagName: string,
+  mapProperties?: (
+    node: AimdNode,
+    context: AimdHtmlRendererContext,
+    defaultElement: Element,
+  ) => Properties,
+  options: CustomElementAimdRendererOptions = {},
+): AimdHtmlNodeRenderer {
+  return (node, defaultElement, context) => {
+    const mappedProperties = mapProperties ? mapProperties(node, context, defaultElement) : {}
+    return assignAimdNodeData({
+      ...defaultElement,
+      tagName,
+      properties: cleanProperties({
+        ...defaultElement.properties,
+        ...mappedProperties,
+        ...(options.container ? { "data-aimd-step-container": "true" } : {}),
+        ...(options.stripDefaultChildren ? { "data-aimd-strip-default-children": "true" } : {}),
+      }),
+    }, node)
+  }
+}
+
+function isWhitespaceTextNode(node: unknown): node is HastText {
+  return typeof node === "object"
+    && node !== null
+    && (node as HastText).type === "text"
+    && !String((node as HastText).value || "").trim()
+}
+
+function toCamelCaseKey(value: string): string {
+  return value.replace(/-([a-z])/g, (_, char: string) => char.toUpperCase())
+}
+
+function getPropertyValue(properties: Properties | undefined, key: string): string | undefined {
+  const value = properties?.[key] ?? properties?.[toCamelCaseKey(key)]
+  if (typeof value === "string") {
+    return value
+  }
+  if (typeof value === "boolean" || typeof value === "number") {
+    return String(value)
+  }
+  if (Array.isArray(value) && value.length > 0) {
+    const first = value[0]
+    return typeof first === "string" ? first : undefined
+  }
+  return undefined
+}
+
+function isAimdStepElement(node: unknown): node is Element {
+  return typeof node === "object"
+    && node !== null
+    && (node as Element).type === "element"
+    && getPropertyValue((node as Element).properties, "data-aimd-type") === "step"
+}
+
+function isHeadingOrDivider(node: unknown): boolean {
+  if (typeof node !== "object" || node === null || (node as Element).type !== "element") {
+    return false
+  }
+
+  const tagName = (node as Element).tagName
+  return tagName === "hr" || /^h[1-6]$/.test(tagName)
+}
+
+function unwrapStandaloneContainerStep(node: unknown): Element | null {
+  if (isAimdStepElement(node)) {
+    return getPropertyValue(node.properties, "data-aimd-step-container") === "true" ? node : null
+  }
+
+  if (
+    typeof node !== "object"
+    || node === null
+    || (node as Element).type !== "element"
+    || (node as Element).tagName !== "p"
+  ) {
+    return null
+  }
+
+  const meaningfulChildren = ((node as Element).children || []).filter((child) => !isWhitespaceTextNode(child))
+  if (meaningfulChildren.length !== 1 || !isAimdStepElement(meaningfulChildren[0])) {
+    return null
+  }
+
+  const stepElement = meaningfulChildren[0]
+  return getPropertyValue(stepElement.properties, "data-aimd-step-container") === "true" ? stepElement : null
+}
+
+function cloneNodeForStepBody<T extends Element | HastText>(node: T): T {
+  return JSON.parse(JSON.stringify(node)) as T
+}
+
+function groupStepBodiesInParent(parent: HastRoot | Element): void {
+  const originalChildren = (parent.children || []) as Array<Element | HastText>
+  const nextChildren: Array<Element | HastText> = []
+
+  for (let index = 0; index < originalChildren.length; index += 1) {
+    const currentNode = originalChildren[index]
+    const stepContainer = unwrapStandaloneContainerStep(currentNode)
+
+    if (!stepContainer) {
+      if (typeof currentNode === "object" && currentNode !== null && (currentNode as Element).type === "element") {
+        groupStepBodiesInParent(currentNode as Element)
+      }
+      nextChildren.push(currentNode)
+      continue
+    }
+
+    const bodyChildren: Array<Element | HastText> = []
+    let scanIndex = index + 1
+    while (scanIndex < originalChildren.length) {
+      const candidate = originalChildren[scanIndex]
+      if (unwrapStandaloneContainerStep(candidate) || isHeadingOrDivider(candidate)) {
+        break
+      }
+
+      if (typeof candidate === "object" && candidate !== null && (candidate as Element).type === "element") {
+        groupStepBodiesInParent(candidate as Element)
+      }
+
+      bodyChildren.push(cloneNodeForStepBody(candidate as Element | HastText))
+      scanIndex += 1
+    }
+
+    const stripChildren = getPropertyValue(stepContainer.properties, "data-aimd-strip-default-children") === "true"
+    stepContainer.children = stripChildren ? [] : [...(stepContainer.children || [])]
+    if (bodyChildren.length > 0) {
+      stepContainer.children.push({
+        type: "element",
+        tagName: "div",
+        properties: {
+          className: ["aimd-step-body"],
+          "data-aimd-step-body": "true",
+        },
+        children: bodyChildren,
+      })
+    }
+
+    nextChildren.push(stepContainer)
+    index = scanIndex - 1
+  }
+
+  ;(parent as HastRoot | Element).children = nextChildren as any
+}
+
+function groupStepBodies(tree: HastRoot): void {
+  groupStepBodiesInParent(tree)
 }
 
 // ---------------------------------------------------------------------------
@@ -211,6 +396,14 @@ function buildQuizStemChildren(
 function createAimdHandler(options: AimdRendererOptions = {}) {
   const quizPreview = resolveQuizPreviewOptions(options.mode ?? "preview", options.quizPreview)
   const messages = createAimdRendererMessages(options.locale, options.messages)
+  const htmlRendererContext: AimdHtmlRendererContext = {
+    mode: options.mode ?? "preview",
+    readonly: false,
+    value: undefined,
+    quizPreview: options.quizPreview,
+    locale: options.locale ?? "en-US",
+    messages,
+  }
 
   return function aimdHandler(state: any, node: AimdNode): Element {
   // Build full node data including step hierarchy
@@ -270,6 +463,11 @@ function createAimdHandler(options: AimdRendererOptions = {}) {
     nodeData.nextId = stepNode.nextId
     nodeData.hasChildren = stepNode.hasChildren
     nodeData.check = stepNode.check
+    nodeData.title = stepNode.title
+    nodeData.subtitle = stepNode.subtitle
+    nodeData.checkedMessage = stepNode.checkedMessage
+    nodeData.result = stepNode.result
+    nodeData.props = stepNode.props
   }
 
   // Serialize AIMD node data to JSON for preservation through rehypeRaw
@@ -636,6 +834,19 @@ function createAimdHandler(options: AimdRendererOptions = {}) {
     const stepNode = node as AimdStepNode
     properties["data-aimd-step"] = stepNode.step
     properties["data-aimd-level"] = stepNode.level
+    properties["data-aimd-check"] = stepNode.check ? "true" : "false"
+    if (stepNode.title) {
+      properties["data-aimd-title"] = stepNode.title
+    }
+    if (stepNode.subtitle) {
+      properties["data-aimd-subtitle"] = stepNode.subtitle
+    }
+    if (stepNode.checkedMessage) {
+      properties["data-aimd-checked-message"] = stepNode.checkedMessage
+    }
+    if (stepNode.result) {
+      properties["data-aimd-result"] = "true"
+    }
     properties.id = `step-${id}`
   }
 
@@ -674,14 +885,21 @@ function createAimdHandler(options: AimdRendererOptions = {}) {
     properties["data-aimd-quiz-stem"] = quizNode.stem
   }
 
-  const element: Element = {
+  const element: Element = assignAimdNodeData({
     type: "element",
     tagName: isRef ? "a" : (isFig ? "figure" : ((fieldType === "var_table" || isQuiz) ? "div" : "span")),
     properties,
     children,
+  }, node)
+
+  const customRenderer = options.aimdElementRenderers?.[node.fieldType]
+  if (customRenderer) {
+    const customElement = customRenderer(node, element, htmlRendererContext)
+    if (customElement) {
+      return assignAimdNodeData(customElement, node)
+    }
   }
-  // Store AIMD data for Vue renderer (may be lost after rehypeRaw)
-  ;(element as any).data = { aimd: node }
+
   return element
   }
 }
@@ -770,6 +988,9 @@ export async function renderToHtml(
   const fields = getExtractedFields(file)
   annotateStepReferenceSequence(hastTree, fields, options)
   assignFigureSequenceNumbers(hastTree, fields)
+  if (options.groupStepBodies) {
+    groupStepBodies(hastTree)
+  }
   await highlightVisibleAssigners(hastTree, options)
   const html = toHtml(hastTree, { allowDangerousHtml: true })
 
@@ -793,6 +1014,9 @@ export async function renderToVue(
   const fields = getExtractedFields(file)
   annotateStepReferenceSequence(hastTree, fields, options)
   assignFigureSequenceNumbers(hastTree, fields)
+  if (options.groupStepBodies) {
+    groupStepBodies(hastTree)
+  }
   await highlightVisibleAssigners(hastTree, options)
   const nodes = renderToVNodes(hastTree, options)
 
@@ -831,6 +1055,9 @@ export function renderToHtmlSync(
   const fields = getExtractedFields(file)
   annotateStepReferenceSequence(hastTree, fields, options)
   assignFigureSequenceNumbers(hastTree, fields)
+  if (options.groupStepBodies) {
+    groupStepBodies(hastTree)
+  }
   const html = toHtml(hastTree, { allowDangerousHtml: true })
 
   return { html, fields }

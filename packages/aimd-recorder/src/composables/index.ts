@@ -66,3 +66,9 @@ export type { VarTableDragState, VarTableDragDropOptions } from './useVarTableDr
 
 export { useFieldRendering } from './useFieldRendering'
 export type { VarInputDisplayOverride, FieldRenderingOptions } from './useFieldRendering'
+
+export {
+  buildAimdRecorderFieldAdapterContext,
+  resolveAimdRecorderFieldVNode,
+} from './useFieldAdapters'
+export type { RecorderFieldAdapterResolverOptions } from './useFieldAdapters'

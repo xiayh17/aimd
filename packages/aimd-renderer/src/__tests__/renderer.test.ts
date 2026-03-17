@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveQuizPreviewOptions } from '../common/quiz-preview'
 import {
+  createCustomElementAimdRenderer,
   parseAndExtract,
   renderToHtmlSync,
   createRenderer,
@@ -123,6 +124,85 @@ describe('renderToHtmlSync', () => {
     const { html } = renderToHtmlSync(content)
     expect(html).toContain('<table')
     expect(html).toContain('<td')
+  })
+
+  it('supports host custom element renderers for AIMD nodes', () => {
+    const { html } = renderToHtmlSync(
+      "{{step|verify, 2, title='Verify Output', subtitle='Cross-check', check=True, result=True}}\n\nStep body content.",
+      {
+        groupStepBodies: true,
+        aimdElementRenderers: {
+          step: createCustomElementAimdRenderer('step-card', (node) => {
+            const stepNode = node as any
+            return {
+              'step-id': stepNode.id,
+              'step-number': stepNode.step,
+              title: stepNode.title,
+              subtitle: stepNode.subtitle,
+              level: String(stepNode.level),
+              'has-check': stepNode.check ? 'true' : undefined,
+              'is-result': stepNode.result ? 'true' : undefined,
+            }
+          }, {
+            container: true,
+            stripDefaultChildren: true,
+          }),
+        },
+      },
+    )
+
+    expect(html).toContain('<step-card')
+    expect(html).toContain('step-id="verify"')
+    expect(html).toContain('step-number="1"')
+    expect(html).toContain('title="Verify Output"')
+    expect(html).toContain('subtitle="Cross-check"')
+    expect(html).toContain('has-check="true"')
+    expect(html).toContain('is-result="true"')
+    expect(html).toContain('data-aimd-step-body="true"')
+    expect(html).toContain('Step body content.')
+  })
+
+  it('stops grouped step bodies at headings and dividers', () => {
+    const { html } = renderToHtmlSync(
+      [
+        '## Section',
+        '',
+        "{{step|step1, title='Step One'}}",
+        '',
+        'Body one.',
+        '',
+        '---',
+        '',
+        '## Next',
+        '',
+        '{{step|step2}}',
+        '',
+        'Body two.',
+      ].join('\n'),
+      {
+        groupStepBodies: true,
+        aimdElementRenderers: {
+          step: createCustomElementAimdRenderer('step-card', (node) => ({
+            'step-id': node.id,
+            'step-number': (node as any).step,
+            title: (node as any).title || node.id,
+          }), {
+            container: true,
+            stripDefaultChildren: true,
+          }),
+        },
+      },
+    )
+
+    expect(html).toContain('<h2>Section</h2>')
+    expect(html).toContain('<hr>')
+    expect(html).toContain('<h2>Next</h2>')
+    expect(html).toContain('step-id="step1"')
+    expect(html).toContain('step-id="step2"')
+    expect(html).toContain('Body one.')
+    expect(html).toContain('Body two.')
+    expect(html.indexOf('Body one.')).toBeLessThan(html.indexOf('<hr>'))
+    expect(html.indexOf('<hr>')).toBeLessThan(html.indexOf('step-id="step2"'))
   })
 })
 
