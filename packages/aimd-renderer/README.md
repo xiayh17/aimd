@@ -76,6 +76,21 @@ const { html } = await renderToHtml("{{step|verify, 2, title='Verify Output', ch
 
 This is intended for host apps that already have their own preview components and need AIMD HTML output to target those custom elements directly. Enable `groupStepBodies` when step containers should absorb following block content as their body/slot.
 
+## Reusable Step Card UI
+
+```ts
+import { createStepCardRenderer, renderToVue } from "@airalogy/aimd-renderer"
+
+const { nodes } = await renderToVue(content, {
+  groupStepBodies: true,
+  aimdRenderers: {
+    step: createStepCardRenderer(),
+  },
+})
+```
+
+Use this when you want a ready-made Vue step-card surface without first mapping AIMD nodes into your own custom elements.
+
 Math styles are loaded automatically when calling async render APIs (`renderToHtml` / `renderToVue`) in browser environments.  
 Use `@airalogy/aimd-renderer/styles` only if you want to preload styles manually.
 

@@ -835,6 +835,9 @@ function createAimdHandler(options: AimdRendererOptions = {}) {
     properties["data-aimd-step"] = stepNode.step
     properties["data-aimd-level"] = stepNode.level
     properties["data-aimd-check"] = stepNode.check ? "true" : "false"
+    if (options.groupStepBodies) {
+      properties["data-aimd-step-container"] = "true"
+    }
     if (stepNode.title) {
       properties["data-aimd-title"] = stepNode.title
     }
@@ -885,9 +888,12 @@ function createAimdHandler(options: AimdRendererOptions = {}) {
     properties["data-aimd-quiz-stem"] = quizNode.stem
   }
 
+  const isGroupedStepContainer = fieldType === "step" && options.groupStepBodies
   const element: Element = assignAimdNodeData({
     type: "element",
-    tagName: isRef ? "a" : (isFig ? "figure" : ((fieldType === "var_table" || isQuiz) ? "div" : "span")),
+    tagName: isRef
+      ? "a"
+      : (isFig ? "figure" : ((fieldType === "var_table" || isQuiz || isGroupedStepContainer) ? "div" : "span")),
     properties,
     children,
   }, node)

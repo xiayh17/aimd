@@ -50,9 +50,11 @@ export {
   createComponentRenderer,
   createEmbeddedRenderer,
   createMermaidRenderer,
+  createStepCardRenderer,
   type ElementRenderer,
   hastToVue,
   renderToVNodes,
+  type AimdStepCardRendererOptions,
   type ShikiHighlighter,
   type VueRendererOptions,
 } from './vue/vue-renderer'

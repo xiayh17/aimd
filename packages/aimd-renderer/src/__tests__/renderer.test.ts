@@ -5,9 +5,56 @@ import {
   createCustomElementAimdRenderer,
   parseAndExtract,
   renderToHtmlSync,
+  renderToVue,
   createRenderer,
 } from '../common/processor'
 import { getFinalIndent, parseFieldTag } from '../index'
+import { createStepCardRenderer } from '../vue/vue-renderer'
+
+function findVNodeByType(node: any, expectedType: string): any | null {
+  if (!node || typeof node !== 'object') {
+    return null
+  }
+
+  if (node.type === expectedType) {
+    return node
+  }
+
+  const children = Array.isArray(node.children)
+    ? node.children
+    : Array.isArray(node.component?.subTree?.children)
+      ? node.component.subTree.children
+      : []
+
+  for (const child of children) {
+    const match = findVNodeByType(child, expectedType)
+    if (match) {
+      return match
+    }
+  }
+
+  return null
+}
+
+function collectVNodeText(node: any): string {
+  if (node == null) {
+    return ''
+  }
+
+  if (typeof node === 'string') {
+    return node
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((item) => collectVNodeText(item)).join(' ')
+  }
+
+  if (typeof node === 'object') {
+    return collectVNodeText(node.children)
+  }
+
+  return ''
+}
 
 // ---------------------------------------------------------------------------
 // resolveQuizPreviewOptions
@@ -203,6 +250,34 @@ describe('renderToHtmlSync', () => {
     expect(html).toContain('Body two.')
     expect(html.indexOf('Body one.')).toBeLessThan(html.indexOf('<hr>'))
     expect(html.indexOf('<hr>')).toBeLessThan(html.indexOf('step-id="step2"'))
+  })
+})
+
+describe('renderToVue', () => {
+  it('renders host-ready step cards with grouped body content', async () => {
+    const { nodes } = await renderToVue(
+      "{{step|verify, 2, title='Verify Output', subtitle='Cross-check', check=True}}\n\nStep body content.",
+      {
+        groupStepBodies: true,
+        aimdRenderers: {
+          step: createStepCardRenderer(),
+        },
+      },
+    )
+
+    expect(nodes).toHaveLength(1)
+    const card = findVNodeByType(nodes[0], 'article') as any
+    expect(card).toBeTruthy()
+    expect(card.props.class).toContain('aimd-step-card')
+    expect(card.props['data-aimd-step-id']).toBe('verify')
+    const header = card.children[0] as any
+    const leftCluster = header.children[0] as any
+    const contentStack = leftCluster.children[1] as any
+    expect(contentStack.children[1].children).toBe('Verify Output')
+    expect(contentStack.children[2].children).toBe('Cross-check')
+    const body = card.children[1] as any
+    expect(body.props.class).toContain('aimd-step-card__body')
+    expect(collectVNodeText(body)).toContain('Step body content.')
   })
 })
 
