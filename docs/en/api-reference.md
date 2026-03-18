@@ -19,7 +19,14 @@ Core AIMD parser, type definitions, syntax grammar, and utilities.
 ### Parser
 
 ```ts
-import { remarkAimd } from "@airalogy/aimd-core"
+import {
+  remarkAimd,
+  rehypeAimd,
+  protectAimdInlineTemplates,
+  restoreAimdInlineTemplates,
+  validateClientAssignerFunctionSource,
+  validateVarDefaultType,
+} from "@airalogy/aimd-core/parser"
 ```
 
 **`remarkAimd`** — Unified remark plugin that parses AIMD inline templates and fenced blocks (`quiz`, `fig`, `assigner`) into typed AST nodes. Attach to a `unified().use(remarkParse)` pipeline.
@@ -29,6 +36,10 @@ import { remarkAimd } from "@airalogy/aimd-core"
 **`protectAimdInlineTemplates(content: string): ProtectedAimdInlineTemplates`** — Escapes AIMD `{{...}}` templates inside Markdown tables so GFM pipe parsing does not break them. Returns `{ content, templates }`.
 
 **`restoreAimdInlineTemplates(content: string, templates: AimdInlineTemplateMap): string`** — Reverses protection after parsing.
+
+**`validateClientAssignerFunctionSource(functionSource: string, id: string): void`** — Validates frontend `client_assigner` function bodies and throws when unsupported or unsafe constructs are present.
+
+**`validateVarDefaultType(def: AimdVarDefinition): string[]`** — Returns warning strings when an AIMD var default value does not match the declared type.
 
 ### Syntax (TextMate / Shiki)
 
@@ -289,6 +300,7 @@ import {
   renderToHtmlSync,
   renderToVue,
   parseAndExtract,
+  createCustomElementAimdRenderer,
   createRenderer,
   createHtmlProcessor,
   defaultRenderer,
@@ -309,10 +321,14 @@ import {
 ```ts
 interface AimdRendererOptions extends ProcessorOptions {
   assignerVisibility?: "hidden" | "collapsed" | "expanded"
+  aimdElementRenderers?: Partial<Record<AimdFieldType, AimdHtmlNodeRenderer>>
+  groupStepBodies?: boolean
   locale?: AimdRendererLocale
   messages?: AimdRendererMessagesInput
 }
 ```
+
+`createCustomElementAimdRenderer(tagName, mapProperties?, options?)` builds an HTML-node renderer that maps AIMD elements into host custom elements while preserving default AIMD metadata.
 
 ### Vue Renderer Utilities
 
@@ -325,6 +341,7 @@ import {
   createCodeBlockRenderer,
   createEmbeddedRenderer,
   createMermaidRenderer,
+  createStepCardRenderer,
 } from "@airalogy/aimd-renderer"
 ```
 
@@ -336,6 +353,7 @@ import {
 | `createAssetRenderer(resolver)` | Build an asset (image/file) renderer. |
 | `createCodeBlockRenderer(highlighter)` | Build a syntax-highlighted code block renderer (uses Shiki). |
 | `createMermaidRenderer()` | Build a Mermaid diagram renderer. |
+| `createStepCardRenderer(options?)` | Build a reusable Vue step-card renderer for AIMD step nodes. |
 
 ### Unified Token Renderer
 
@@ -453,6 +471,10 @@ function createEmptyProtocolRecordData(): AimdProtocolRecordData
 import type {
   AimdFieldMeta,
   AimdFieldState,
+  AimdRecorderFieldAdapter,
+  AimdRecorderFieldAdapterContext,
+  AimdRecorderFieldAdapters,
+  AimdRecorderFieldType,
   FieldEventPayload,
   TableEventPayload,
 } from "@airalogy/aimd-recorder"
@@ -462,6 +484,10 @@ import type {
 |------|-------------|
 | `AimdFieldMeta` | Per-field metadata: `inputType`, `required`, `pattern`, `enumOptions`, `disabled`, `placeholder`, `assigner`. |
 | `AimdFieldState` | Per-field runtime state: `loading`, `error`, `validationError`, `disabled`. |
+| `AimdRecorderFieldType` | Built-in recorder field kinds: `"var"`, `"var_table"`, `"step"`, `"check"`, `"quiz"`. |
+| `AimdRecorderFieldAdapterContext` | Host adapter context containing the parsed AIMD node, current value, localized messages, record snapshot, and recorder-generated default vnode. |
+| `AimdRecorderFieldAdapter` | Function type for wrapping or replacing a recorder field vnode. |
+| `AimdRecorderFieldAdapters` | Partial map of field-type-specific recorder adapters. |
 | `FieldEventPayload` | Event payload: `{ section, fieldKey, value? }`. |
 | `TableEventPayload` | Table event payload: `{ tableName, rowIndex?, columns }`. |
 
