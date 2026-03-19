@@ -17,6 +17,25 @@ export function cloneRecordData(value: AimdProtocolRecordData): AimdProtocolReco
   return JSON.parse(JSON.stringify(value))
 }
 
+function stableSerialize(value: unknown): string {
+  if (value == null || typeof value !== "object") {
+    return JSON.stringify(value)
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map(item => stableSerialize(item)).join(",")}]`
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+
+  return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableSerialize(item)}`).join(",")}}`
+}
+
+export function getRecordDataSignature(value: Partial<AimdProtocolRecordData> | undefined): string {
+  return stableSerialize(normalizeIncomingRecord(value))
+}
+
 // ---------------------------------------------------------------------------
 // Step / check normalisation
 // ---------------------------------------------------------------------------

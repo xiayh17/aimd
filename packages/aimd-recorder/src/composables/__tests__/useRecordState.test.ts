@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   cloneRecordData,
+  getRecordDataSignature,
   normalizeStepLike,
   normalizeIncomingRecord,
   replaceSection,
@@ -42,6 +43,39 @@ describe('cloneRecordData', () => {
 
     ;(cloned.var.data as any).nested.push(4)
     expect((original.var.data as any).nested).toEqual([1, 2, 3])
+  })
+})
+
+describe('getRecordDataSignature', () => {
+  it('returns the same signature for semantically equal records with different key order', () => {
+    const left = {
+      var: {
+        summary: { blocks: [{ text: 'A', id: 2 }, { id: 1, text: 'B' }] },
+        temperature: 25,
+      },
+      step: {
+        s1: { annotation: 'done', checked: true },
+      },
+    }
+
+    const right = {
+      step: {
+        s1: { checked: true, annotation: 'done' },
+      },
+      var: {
+        temperature: 25,
+        summary: { blocks: [{ id: 2, text: 'A' }, { text: 'B', id: 1 }] },
+      },
+    }
+
+    expect(getRecordDataSignature(left)).toBe(getRecordDataSignature(right))
+  })
+
+  it('returns a different signature when record content changes', () => {
+    const left = { var: { summary: 'alpha' } }
+    const right = { var: { summary: 'beta' } }
+
+    expect(getRecordDataSignature(left)).not.toBe(getRecordDataSignature(right))
   })
 })
 

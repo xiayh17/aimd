@@ -33,6 +33,7 @@ const props = withDefaults(defineProps<AimdEditorProps>(), {
   showMdToolbar: true,
   enableBlockHandle: true,
   enableSlashMenu: true,
+  keepInactiveEditorsMounted: true,
   minHeight: 500,
   readonly: false,
   monacoOptions: () => ({}),
@@ -83,6 +84,9 @@ const currentTheme = ref(props.theme)
 function toggleTheme() {
   currentTheme.value = currentTheme.value === 'aimd-light' ? 'aimd-dark' : 'aimd-light'
 }
+
+const shouldMountSourceEditor = computed(() => props.keepInactiveEditorsMounted || editorMode.value === 'source')
+const shouldMountWysiwygEditor = computed(() => props.keepInactiveEditorsMounted || editorMode.value === 'wysiwyg')
 
 // --- Computed toolbar items ---
 const localizedFieldTypes = computed(() => createAimdFieldTypes(resolvedMessages.value))
@@ -175,9 +179,9 @@ defineExpose({
     />
 
     <!-- Editor area -->
-    <div class="aimd-editor-panel" :style="{ minHeight: minHeight + 'px' }">
-      <!-- Source mode: Monaco -->
-      <div v-show="editorMode === 'source'">
+      <div class="aimd-editor-panel" :style="{ minHeight: minHeight + 'px' }">
+        <!-- Source mode: Monaco -->
+      <div v-if="shouldMountSourceEditor" v-show="editorMode === 'source'">
         <AimdSourceEditor
           ref="sourceEditorRef"
           :content="content"
@@ -193,12 +197,13 @@ defineExpose({
       </div>
 
       <!-- WYSIWYG mode: Milkdown -->
-      <div v-show="editorMode === 'wysiwyg'">
+      <div v-if="shouldMountWysiwygEditor" v-show="editorMode === 'wysiwyg'">
         <AimdWysiwygEditor
           ref="wysiwygEditorRef"
           :content="content"
           :min-height="minHeight"
           :enable-block-handle="enableBlockHandle"
+          :active="editorMode === 'wysiwyg'"
           :resolved-messages="resolvedMessages"
           :localized-field-types="localizedFieldTypes"
           @markdown-updated="onMilkdownMarkdownUpdated"

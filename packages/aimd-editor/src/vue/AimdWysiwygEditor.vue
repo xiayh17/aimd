@@ -25,13 +25,18 @@ import { aimdMilkdownPlugins } from './milkdown-aimd-plugin'
 import type { AimdFieldType } from './types'
 import type { AimdEditorMessages } from './locales'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   content: string
   minHeight: number
   enableBlockHandle: boolean
+  active?: boolean
+  readonly?: boolean
   resolvedMessages: AimdEditorMessages
   localizedFieldTypes: AimdFieldType[]
-}>()
+}>(), {
+  active: true,
+  readonly: false,
+})
 
 const emit = defineEmits<{
   (e: 'markdown-updated', ctx: any, markdown: string, prev: string): void
@@ -41,6 +46,16 @@ const emit = defineEmits<{
 
 function toMilkdownMarkdown(markdown: string): string {
   return protectAimdInlineTemplates(markdown).content
+}
+
+function createEditorViewOptions(readonly: boolean) {
+  return {
+    attributes: {
+      class: readonly ? 'milkdown-editor-content milkdown-editor-content--readonly' : 'milkdown-editor-content',
+      spellcheck: 'false',
+    },
+    editable: () => !readonly,
+  }
 }
 
 // --- Block add menu ---
@@ -62,7 +77,7 @@ interface BlockMenuGroup {
 // Block menu SVG icon helper (14x14)
 const _bsi = (d: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
 
-const blockMenuGroups = computed<BlockMenuGroup[]>(() => [
+const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
   {
     label: props.resolvedMessages.blockMenu.groups.text,
     items: [
@@ -174,7 +189,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => [
       },
     })),
   },
-])
+]).filter(group => group.items.length > 0))
 
 function onBlockMenuClick(item: BlockMenuItem) {
   showBlockMenu.value = false
@@ -257,6 +272,8 @@ const tableIcons = {
 }
 
 const milkdownEditorRef = shallowRef<Editor | null>(null)
+let isSyncingContent = false
+let lastKnownMarkdown = props.content
 
 // --- Milkdown inner component ---
 const MilkdownEditorInner = defineComponent({
@@ -264,6 +281,7 @@ const MilkdownEditorInner = defineComponent({
   props: {
     defaultValue: { type: String, default: '' },
     enableBlockHandle: { type: Boolean, default: true },
+    readonly: { type: Boolean, default: false },
   },
   emits: ['ready', 'markdown-updated'],
   setup(innerProps, { emit: innerEmit }) {
@@ -274,9 +292,7 @@ const MilkdownEditorInner = defineComponent({
         .config((ctx) => {
           ctx.set(rootCtx, root)
           ctx.set(defaultValueCtx, toMilkdownMarkdown(defaultVal.value))
-          ctx.set(editorViewOptionsCtx, {
-            attributes: { class: 'milkdown-editor-content', spellcheck: 'false' },
-          })
+          ctx.set(editorViewOptionsCtx, createEditorViewOptions(innerProps.readonly))
           ctx.get(listenerCtx)
             .markdownUpdated((_ctx, markdown, prev) => {
               if (markdown !== prev) {
@@ -412,12 +428,64 @@ const MilkdownEditorInner = defineComponent({
 
 function onInnerReady(editor: Editor) {
   milkdownEditorRef.value = editor
+  lastKnownMarkdown = props.content
   emit('ready', editor)
 }
 
 function onInnerMarkdownUpdated(ctx: any, markdown: string, prev: string) {
+  if (isSyncingContent) {
+    return
+  }
+
+  lastKnownMarkdown = markdown
   emit('markdown-updated', ctx, markdown, prev)
 }
+
+function syncMilkdownContent(content: string): boolean {
+  if (!milkdownEditorRef.value) {
+    return false
+  }
+
+  isSyncingContent = true
+  try {
+    milkdownEditorRef.value.action(replaceAll(toMilkdownMarkdown(content)))
+    lastKnownMarkdown = content
+  } catch {
+    isSyncingContent = false
+    return false
+  }
+  isSyncingContent = false
+  return true
+}
+
+watch(() => props.content, (content) => {
+  if (!props.active || !milkdownEditorRef.value || content === lastKnownMarkdown) {
+    return
+  }
+
+  syncMilkdownContent(content)
+})
+
+watch(() => props.readonly, (readonly) => {
+  if (!milkdownEditorRef.value) {
+    return
+  }
+
+  try {
+    milkdownEditorRef.value.action((ctx) => {
+      ctx.get(editorViewCtx).setProps(createEditorViewOptions(!!readonly))
+    })
+  } catch {}
+}, { immediate: true })
+
+watch(() => props.active, async (active) => {
+  if (!active || !milkdownEditorRef.value || props.content === lastKnownMarkdown) {
+    return
+  }
+
+  await nextTick()
+  syncMilkdownContent(props.content)
+})
 
 onBeforeUnmount(() => {
   blockProviderRef.value?.destroy()
@@ -442,6 +510,7 @@ defineExpose({
       <MilkdownEditorInner
         :default-value="content"
         :enable-block-handle="enableBlockHandle"
+        :readonly="!!readonly"
         @ready="onInnerReady"
         @markdown-updated="onInnerMarkdownUpdated"
       />

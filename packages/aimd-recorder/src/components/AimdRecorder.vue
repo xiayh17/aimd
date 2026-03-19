@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, nextTick, reactive, ref, watch, type VNode } from "vue"
+import { computed, defineComponent, h, nextTick, reactive, ref, watch, type PropType, type VNode } from "vue"
 import type {
   AimdCheckNode,
   AimdClientAssignerField,
@@ -31,6 +31,7 @@ import {
   applyIncomingRecord,
   cloneRecordData,
   ensureDefaultsFromFields,
+  getRecordDataSignature,
   getQuizDefaultValue,
 } from "../composables/useRecordState"
 import {
@@ -176,6 +177,19 @@ let pendingInlineBuildRequestId: number | null = null
 const resolvedLocale = computed(() => resolveAimdRecorderLocale(props.locale))
 const resolvedMessages = computed(() => createAimdRecorderMessages(resolvedLocale.value, props.messages))
 const resolvedTypePlugins = computed(() => createAimdTypePlugins(props.typePlugins))
+
+const InlineNodesOutlet = defineComponent({
+  name: "AimdRecorderInlineNodesOutlet",
+  props: {
+    nodes: {
+      type: Array as PropType<VNode[]>,
+      required: true,
+    },
+  },
+  setup(outletProps) {
+    return () => outletProps.nodes
+  },
+})
 
 function applyFieldAdapter<TFieldType extends "var" | "var_table" | "step" | "check" | "quiz">(
   fieldType: TFieldType,
@@ -573,6 +587,7 @@ async function rebuildInlineNodes(
       readonly: props.readonly,
       value: localRecord as Record<string, Record<string, unknown>>,
     },
+    blockVarTypes: ["AiralogyMarkdown"],
     aimdRenderers: {
       var: node => renderInlineVar(node as AimdVarNode),
       var_table: node => renderInlineVarTable(node as AimdVarTableNode),
@@ -634,13 +649,20 @@ async function parseAndBuild() {
 watch(
   () => props.modelValue,
   (value) => {
+    const shouldRebuild = getRecordDataSignature(value) !== getRecordDataSignature(localRecord)
+    if (!shouldRebuild) {
+      return
+    }
     syncingFromExternal = true
     applyIncomingRecord(localRecord, value)
     syncingFromExternal = false
-    if (assignerRunner.applyCurrentClientAssigners()) {
+    const assignerChanged = assignerRunner.applyCurrentClientAssigners()
+    if (assignerChanged) {
       emitRecordUpdate()
     }
-    scheduleInlineRebuild()
+    if (shouldRebuild || assignerChanged) {
+      scheduleInlineRebuild()
+    }
   },
   { deep: true, immediate: true },
 )
@@ -668,7 +690,7 @@ defineExpose({
     <div v-if="renderError" class="aimd-protocol-recorder__error">{{ renderError }}</div>
 
     <div v-else-if="inlineNodes.length" ref="contentRoot" class="aimd-protocol-recorder__content">
-      <component :is="() => inlineNodes" />
+      <InlineNodesOutlet :nodes="inlineNodes" />
     </div>
 
     <div v-else class="aimd-protocol-recorder__empty">{{ resolvedMessages.common.emptyContent }}</div>
@@ -792,6 +814,16 @@ defineExpose({
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field--no-style.aimd-field__label) { min-height: 30px; border-radius: 6px 6px 0 0; }
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field__scope) { align-self: center; height: 22px; margin-left: 3px; padding: 0 7px; border-radius: 6px; }
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-stacked .aimd-field__id) { display: flex; flex: 1; align-items: center; padding: 0 10px 0 6px; font-size: 13px; font-weight: 500; color: #1565c0; white-space: nowrap; }
+.aimd-protocol-recorder__content :deep(.aimd-rec-inline--var-markdown) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  width: min(100%, 1040px);
+  max-width: 100%;
+  margin: 12px 0;
+  vertical-align: top;
+}
 
 /* ── Stacked input controls ─────────────────────────────────────────────── */
 .aimd-protocol-recorder__content :deep(.aimd-rec-inline__input--stacked) {

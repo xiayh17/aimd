@@ -2,6 +2,16 @@
 
 All notable changes to `@airalogy/aimd-recorder` will be documented in this file.
 
+## [1.9.0] - 2026-03-19
+
+### Changed
+
+- Replaced the built-in `AiralogyMarkdown` recorder textarea with a full-width embedded AIMD/Markdown editor that opens in `Source` mode by default, still supports switching to `WYSIWYG`, and lifts inline occurrences into their own block row while keeping the same type token and plugin override path.
+
+### Fixed
+
+- Stabilized recorder subtree rendering during input updates so inline fields no longer flash, lose typed characters, or jump scroll position when parent `v-model` state echoes back into the recorder.
+
 ## [1.8.0] - 2026-03-19
 
 ### Added
