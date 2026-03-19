@@ -175,9 +175,9 @@ defineExpose({
     />
 
     <!-- Editor area -->
-    <div class="aimd-editor-panel" :style="{ minHeight: minHeight + 'px' }">
+    <div class="aimd-editor-panel" :style="minHeight > 0 ? { minHeight: minHeight + 'px' } : { height: '100%' }">
       <!-- Source mode: Monaco -->
-      <div v-show="editorMode === 'source'">
+      <div v-show="editorMode === 'source'" style="height: 100%">
         <AimdSourceEditor
           ref="sourceEditorRef"
           :content="content"
@@ -193,7 +193,7 @@ defineExpose({
       </div>
 
       <!-- WYSIWYG mode: Milkdown -->
-      <div v-show="editorMode === 'wysiwyg'">
+      <div v-show="editorMode === 'wysiwyg'" style="height: 100%">
         <AimdWysiwygEditor
           ref="wysiwygEditorRef"
           :content="content"
@@ -229,6 +229,7 @@ defineExpose({
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   overflow: hidden;
+  height: 100%;
 }
 
 /* --- Unified toolbar --- */
@@ -366,10 +367,16 @@ defineExpose({
 .aimd-editor-panel {
   background: #fff;
   overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .aimd-editor-source-mode {
   overflow: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
 .aimd-editor-container {
