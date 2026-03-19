@@ -3,6 +3,7 @@ import { ref, shallowRef, computed, watch, nextTick, defineComponent, h, toRef, 
 import type { Editor } from '@milkdown/kit/core'
 import { MilkdownProvider, Milkdown, useEditor, useInstance } from '@milkdown/vue'
 import { defaultValueCtx, Editor as MilkdownEditor, rootCtx, editorViewOptionsCtx, editorViewCtx } from '@milkdown/kit/core'
+import type { Ctx } from '@milkdown/kit/ctx'
 import { createTable } from '@milkdown/kit/preset/gfm'
 import { commonmark, paragraphSchema, headingSchema, blockquoteSchema, bulletListSchema, orderedListSchema, codeBlockSchema, hrSchema, listItemSchema } from '@milkdown/kit/preset/commonmark'
 import { commandsCtx } from '@milkdown/kit/core'
@@ -66,7 +67,7 @@ const blockProviderRef = shallowRef<BlockProvider | null>(null)
 interface BlockMenuItem {
   label: string
   icon: string
-  onRun: (ctx: any) => void
+  onRun: (ctx: Ctx) => void
 }
 
 interface BlockMenuGroup {
@@ -83,7 +84,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
     items: [
       {
         label: props.resolvedMessages.blockMenu.items.text, icon: 'T',
-        onRun: (ctx) => {
+        onRun: (ctx: Ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
           commands.call(setBlockTypeCommand.key, { nodeType: paragraphSchema.type(ctx) })
@@ -91,7 +92,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
       },
       {
         label: props.resolvedMessages.blockMenu.items.heading1, icon: 'H1',
-        onRun: (ctx) => {
+        onRun: (ctx: Ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
           commands.call(setBlockTypeCommand.key, { nodeType: headingSchema.type(ctx), attrs: { level: 1 } })
@@ -99,7 +100,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
       },
       {
         label: props.resolvedMessages.blockMenu.items.heading2, icon: 'H2',
-        onRun: (ctx) => {
+        onRun: (ctx: Ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
           commands.call(setBlockTypeCommand.key, { nodeType: headingSchema.type(ctx), attrs: { level: 2 } })
@@ -107,7 +108,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
       },
       {
         label: props.resolvedMessages.blockMenu.items.heading3, icon: 'H3',
-        onRun: (ctx) => {
+        onRun: (ctx: Ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
           commands.call(setBlockTypeCommand.key, { nodeType: headingSchema.type(ctx), attrs: { level: 3 } })
@@ -116,7 +117,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
       {
         label: props.resolvedMessages.blockMenu.items.quote,
         icon: _bsi('<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>'),
-        onRun: (ctx) => {
+        onRun: (ctx: Ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
           commands.call(wrapInBlockTypeCommand.key, { nodeType: blockquoteSchema.type(ctx) })
@@ -125,7 +126,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
       {
         label: props.resolvedMessages.blockMenu.items.divider,
         icon: _bsi('<line x1="2" y1="12" x2="22" y2="12" stroke-width="2.5"/>'),
-        onRun: (ctx) => {
+        onRun: (ctx: Ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
           commands.call(addBlockTypeCommand.key, { nodeType: hrSchema.type(ctx) })
@@ -139,7 +140,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
       {
         label: props.resolvedMessages.blockMenu.items.bulletList,
         icon: _bsi('<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="18" r="1" fill="currentColor"/>'),
-        onRun: (ctx) => {
+        onRun: (ctx: Ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
           commands.call(wrapInBlockTypeCommand.key, { nodeType: bulletListSchema.type(ctx) })
@@ -148,7 +149,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
       {
         label: props.resolvedMessages.blockMenu.items.orderedList,
         icon: _bsi('<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="3" y="7.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">1</text><text x="3" y="13.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">2</text><text x="3" y="19.5" font-size="6" fill="currentColor" stroke="none" font-weight="600">3</text>'),
-        onRun: (ctx) => {
+        onRun: (ctx: Ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
           commands.call(wrapInBlockTypeCommand.key, { nodeType: orderedListSchema.type(ctx) })
@@ -162,7 +163,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
       {
         label: props.resolvedMessages.blockMenu.items.codeBlock,
         icon: _bsi('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
-        onRun: (ctx) => {
+        onRun: (ctx: Ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
           commands.call(setBlockTypeCommand.key, { nodeType: codeBlockSchema.type(ctx) })
@@ -171,7 +172,7 @@ const blockMenuGroups = computed<BlockMenuGroup[]>(() => ([
       {
         label: props.resolvedMessages.blockMenu.items.table,
         icon: _bsi('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>'),
-        onRun: (ctx) => {
+        onRun: (ctx: Ctx) => {
           const commands = ctx.get(commandsCtx)
           commands.call(clearTextInCurrentBlockCommand.key)
           commands.call(addBlockTypeCommand.key, { nodeType: createTable(ctx, 3, 3) })
