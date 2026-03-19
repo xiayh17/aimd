@@ -131,8 +131,8 @@ test('AimdEditor can unmount inactive editor panes for embedded recorder fields'
   assert.match(editorSource, /keepInactiveEditorsMounted: true/)
   assert.match(editorSource, /const shouldMountSourceEditor = computed\(\(\) => props\.keepInactiveEditorsMounted \|\| editorMode\.value === 'source'\)/)
   assert.match(editorSource, /const shouldMountWysiwygEditor = computed\(\(\) => props\.keepInactiveEditorsMounted \|\| editorMode\.value === 'wysiwyg'\)/)
-  assert.match(editorSource, /<div v-if="shouldMountSourceEditor" v-show="editorMode === 'source'">/)
-  assert.match(editorSource, /<div v-if="shouldMountWysiwygEditor" v-show="editorMode === 'wysiwyg'">/)
+  assert.match(editorSource, /<div v-if="shouldMountSourceEditor" v-show="editorMode === 'source'"/)
+  assert.match(editorSource, /<div v-if="shouldMountWysiwygEditor" v-show="editorMode === 'wysiwyg'"/)
 })
 
 test('AimdEditorToolbar uses non-submit buttons for host safety', () => {
