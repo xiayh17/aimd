@@ -67,6 +67,8 @@ export interface AimdEditorProps {
   monacoOptions?: Record<string, any>
   /** Additional var type presets shown in the insertion dialog */
   varTypePlugins?: AimdVarTypePresetOption[]
+  /** Keep inactive editor instances mounted in the DOM (default: true) */
+  keepInactiveEditorsMounted?: boolean
 }
 
 export interface AimdEditorEmits {
