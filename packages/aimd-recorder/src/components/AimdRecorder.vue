@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, reactive, ref, watch, type PropType, type VNode } from "vue"
+import { Fragment, computed, defineComponent, h, nextTick, reactive, ref, shallowRef, watch, type PropType, type VNode, type VNodeChild } from "vue"
 import type {
   AimdCheckNode,
   AimdClientAssignerField,
@@ -500,7 +500,7 @@ function renderInlineVarTable(node: AimdVarTableNode): VNode {
   return applyFieldAdapter("var_table", fieldKey, node, rows, vnode)
 }
 
-function renderInlineStep(node: AimdStepNode, children?: VNodeChild[]): VNode {
+function renderInlineStep(node: AimdStepNode): VNode {
   const id = node.id
   const fieldKey = `step:${id}`
   if (!(id in localRecord.step)) {
@@ -510,6 +510,7 @@ function renderInlineStep(node: AimdStepNode, children?: VNodeChild[]): VNode {
   const state = localRecord.step[id]
   const disabled = fieldRendering.isFieldDisabled(fieldKey)
   const extraClasses = fieldRendering.fieldStateClasses(fieldKey)
+  const bodyChildren = shallowRef<VNodeChild[]>([])
 
   const headerVnode = h(AimdStepField, {
     node,
@@ -538,13 +539,19 @@ function renderInlineStep(node: AimdStepNode, children?: VNodeChild[]): VNode {
       `aimd-step-card-block--level-${node.level || 1}`,
       Boolean(state.checked) ? "aimd-step-card-block--checked" : "",
     ],
-    "data-step-id": id,
-  }, [
+    "data-aimd-step-card": id,
+    "data-aimd-step-level": String(node.level || 1),
+  }, () => [
     h("div", { class: "aimd-step-card-block__header" }, [headerVnode]),
-    children && children.length > 0
-      ? h("div", { class: "aimd-step-card-block__body" }, children)
+    bodyChildren.value.length > 0
+      ? h("div", { class: "aimd-step-card-block__body" }, bodyChildren.value)
       : null,
   ])
+
+  // attach setter so paragraph renderer can inject body content
+  ;(cardVnode as any).__setStepBody = (nodes: VNodeChild[]) => {
+    bodyChildren.value = nodes
+  }
 
   return applyFieldAdapter("step", fieldKey, node, state, cardVnode)
 }
@@ -643,9 +650,51 @@ async function rebuildInlineNodes(
     aimdRenderers: {
       var: node => renderInlineVar(node as AimdVarNode),
       var_table: node => renderInlineVarTable(node as AimdVarTableNode),
-      step: (node, _ctx, children) => renderInlineStep(node as AimdStepNode, children),
+      step: (node) => renderInlineStep(node as AimdStepNode),
       check: node => renderInlineCheck(node as AimdCheckNode),
       quiz: node => renderInlineQuiz(node as AimdQuizNode),
+    },
+    elementRenderers: {
+      p: (_node, children) => {
+        // Find step card vnodes and collect subsequent siblings as body
+        const result: VNodeChild[] = []
+        let i = 0
+        while (i < children.length) {
+          const child = children[i] as any
+          const setBody = child?.__setStepBody
+            ?? child?.el?.__setStepBody
+            ?? (child?.type === 'div' ? child?.props?.['data-aimd-step-card'] ? child : null : null)?.__setStepBody
+          // detect via props
+          const isStepCard = child?.props?.['data-aimd-step-card'] !== undefined
+          if (isStepCard) {
+            // collect all following non-step siblings as body
+            const body: VNodeChild[] = []
+            let j = i + 1
+            while (j < children.length) {
+              const next = children[j] as any
+              if (next?.props?.['data-aimd-step-card'] !== undefined) break
+              body.push(children[j])
+              j++
+            }
+            if (body.length > 0 && child.__setStepBody) {
+              child.__setStepBody(body)
+              i = j // skip consumed children
+            } else {
+              i++
+            }
+            result.push(child)
+          } else {
+            result.push(child)
+            i++
+          }
+        }
+        // if paragraph only contains step cards, render as fragment without <p>
+        const hasOnlyStepCards = result.every((c: any) => c?.props?.['data-aimd-step-card'] !== undefined)
+        if (hasOnlyStepCards) {
+          return h(Fragment, null, result)
+        }
+        return h('p', result)
+      },
     },
   })
 
