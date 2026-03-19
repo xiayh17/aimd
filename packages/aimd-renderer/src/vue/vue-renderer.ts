@@ -1043,7 +1043,7 @@ export function createStepCardRenderer(
   return (node, ctx, children) => {
     const stepNode = node as AimdStepNode
     const stepLabel = stepNode.step || "?"
-    const title = stepNode.title || stepNode.id
+    const title = stepNode.title || ""
     const subtitle = stepNode.subtitle || ""
     const isResult = Boolean(stepNode.result)
     const hasCheck = Boolean(stepNode.check)
@@ -1131,16 +1131,18 @@ export function createStepCardRenderer(
                   },
                 }, ctx.messages.scope.step)
               : null,
-            h("div", {
-              class: "aimd-step-card__title",
-              style: {
-                fontSize: "18px",
-                fontWeight: "700",
-                lineHeight: "1.2",
-                color: "#1b2b22",
-                wordBreak: "break-word",
-              },
-            }, title),
+            title
+              ? h("div", {
+                  class: "aimd-step-card__title",
+                  style: {
+                    fontSize: "18px",
+                    fontWeight: "700",
+                    lineHeight: "1.2",
+                    color: "#1b2b22",
+                    wordBreak: "break-word",
+                  },
+                }, title)
+              : null,
             subtitle
               ? h("div", {
                   class: "aimd-step-card__subtitle",

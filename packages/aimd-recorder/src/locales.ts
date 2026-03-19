@@ -36,6 +36,8 @@ export interface AimdRecorderMessages {
     openPlaceholder: string
   }
   step: {
+    confirmAction: string
+    checkedAction: string
     annotationPlaceholder: string
   }
   check: {
@@ -173,6 +175,8 @@ const EN_US_MESSAGES: AimdRecorderMessages = {
     openPlaceholder: "Input your answer...",
   },
   step: {
+    confirmAction: "Confirm step",
+    checkedAction: "Completed",
     annotationPlaceholder: "Notes",
   },
   check: {
@@ -283,6 +287,8 @@ const ZH_CN_MESSAGES: AimdRecorderMessages = {
     openPlaceholder: "请输入答案...",
   },
   step: {
+    confirmAction: "确认步骤",
+    checkedAction: "已完成",
     annotationPlaceholder: "备注",
   },
   check: {

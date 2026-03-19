@@ -24,10 +24,13 @@ export const AimdStepField = defineComponent({
       const disabled = props.disabled
       const extraClasses = props.extraClasses
       const isChecked = Boolean(state.checked)
+      const hasCheck = Boolean(node.check)
 
       return h("span", {
         class: [
           "aimd-rec-step-card",
+          hasCheck ? "aimd-rec-step-card--checkable" : "",
+          hasCheck ? "" : "aimd-rec-step-card--passive",
           isChecked ? "aimd-rec-step-card--checked" : "aimd-rec-step-card--awaiting",
           ...extraClasses,
         ],
@@ -35,18 +38,7 @@ export const AimdStepField = defineComponent({
         // left accent bar
         h("span", { class: "aimd-rec-step-card__bar" }),
         // badge
-        h("label", { class: "aimd-rec-step-card__badge-wrap" }, [
-          h("input", {
-            "data-rec-focus-key": `step:${id}:checked`,
-            type: "checkbox",
-            class: "aimd-rec-step-card__checkbox",
-            disabled,
-            checked: isChecked,
-            onChange: (event: Event) => {
-              emit("check-change", { id, value: (event.target as HTMLInputElement).checked })
-            },
-            onBlur: () => emit("blur", { id }),
-          }),
+        h("span", { class: "aimd-rec-step-card__badge-wrap" }, [
           h("span", {
             class: ["aimd-rec-step-card__badge", isChecked ? "aimd-rec-step-card__badge--checked" : ""],
           }, [
@@ -72,6 +64,27 @@ export const AimdStepField = defineComponent({
             onBlur: () => emit("blur", { id }),
           }),
         ]),
+        hasCheck
+          ? h("button", {
+              "data-rec-focus-key": `step:${id}:checked`,
+              type: "button",
+              class: [
+                "aimd-rec-step-card__action",
+                isChecked ? "aimd-rec-step-card__action--checked" : "aimd-rec-step-card__action--awaiting",
+              ],
+              disabled,
+              "aria-pressed": isChecked ? "true" : "false",
+              onClick: () => {
+                emit("check-change", { id, value: !isChecked })
+              },
+              onBlur: () => emit("blur", { id }),
+            }, [
+              h("span", { class: "aimd-rec-step-card__action-dot", "aria-hidden": "true" }),
+              h("span", { class: "aimd-rec-step-card__action-label" }, isChecked
+                ? props.messages.step.checkedAction
+                : props.messages.step.confirmAction),
+            ])
+          : null,
       ])
     }
   },

@@ -45,6 +45,20 @@ export interface AimdRendererMessages {
     clientSummary: string
     serverSummary: string
   }
+  callout: {
+    note: string
+    tip: string
+    warning: string
+    caution: string
+    important: string
+    example: string
+    abstract: string
+    info: string
+    success: string
+    danger: string
+    bug: string
+    quote: string
+  }
 }
 
 export type AimdRendererMessagesInput = DeepPartial<AimdRendererMessages>
@@ -104,6 +118,20 @@ const EN_US_MESSAGES: AimdRendererMessages = {
     clientSummary: "Client assigner",
     serverSummary: "Server assigner",
   },
+  callout: {
+    note: "Note",
+    tip: "Tip",
+    warning: "Warning",
+    caution: "Caution",
+    important: "Important",
+    example: "Example",
+    abstract: "Abstract",
+    info: "Info",
+    success: "Success",
+    danger: "Danger",
+    bug: "Known Issue",
+    quote: "Quote",
+  },
 }
 
 const ZH_CN_MESSAGES: AimdRendererMessages = {
@@ -138,6 +166,20 @@ const ZH_CN_MESSAGES: AimdRendererMessages = {
   assigner: {
     clientSummary: "前端 assigner",
     serverSummary: "服务端 assigner",
+  },
+  callout: {
+    note: "说明",
+    tip: "提示",
+    warning: "警告",
+    caution: "注意",
+    important: "重点",
+    example: "示例",
+    abstract: "摘要",
+    info: "信息",
+    success: "成功",
+    danger: "危险",
+    bug: "已知问题",
+    quote: "引用",
   },
 }
 

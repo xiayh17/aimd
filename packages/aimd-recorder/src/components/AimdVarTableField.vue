@@ -6,6 +6,33 @@ import type { AimdRecorderMessages } from "../locales"
 import { getAimdRecorderScopeLabel } from "../locales"
 import { getVarTableColumns, getVarTableRowKey } from "../composables/useVarTableDragDrop"
 
+function renderTrashIcon() {
+  return h("svg", {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "1.9",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+    "aria-hidden": "true",
+  }, [
+    h("path", { d: "M3 6h18" }),
+    h("path", { d: "M8 6V4.8c0-.7.6-1.3 1.3-1.3h5.4c.7 0 1.3.6 1.3 1.3V6" }),
+    h("path", { d: "M18 6l-1 13.1c-.1.8-.7 1.4-1.5 1.4H8.5c-.8 0-1.4-.6-1.5-1.4L6 6" }),
+    h("path", { d: "M10 10.5v6" }),
+    h("path", { d: "M14 10.5v6" }),
+  ])
+}
+
+function estimateDisplayWidth(value: unknown): number {
+  const text = String(value ?? "")
+  let width = 0
+  for (const char of text) {
+    width += (char.codePointAt(0) ?? 0) > 0xFF ? 2 : 1
+  }
+  return width
+}
+
 export default defineComponent({
   name: "AimdVarTableField",
   props: {
@@ -35,16 +62,65 @@ export default defineComponent({
     const wrapperRef = ref<HTMLElement | null>(null)
     const tableRef = ref<HTMLElement | null>(null)
     let ro: ResizeObserver | null = null
+    const OVERFLOW_HYSTERESIS_PX = 48
+    let pendingOverflow: boolean | null = null
+    let pendingOverflowFrames = 0
 
     let rafId: number | null = null
 
+    function estimateColumnWidthCh(column: string, rows: Record<string, string>[]): number {
+      const contentWidth = rows.reduce((maxWidth, row) => {
+        return Math.max(maxWidth, estimateDisplayWidth(row[column]))
+      }, estimateDisplayWidth(column))
+
+      const normalizedColumn = column.toLowerCase()
+      const isWideTextColumn
+        = /note|remark|comment|description|summary|title|name/.test(normalizedColumn)
+          || /备注|说明|描述|总结|标题|名称/.test(column)
+
+      const minWidth = isWideTextColumn ? 18 : 10
+      const maxWidth = isWideTextColumn ? 36 : 22
+      return Math.max(minWidth, Math.min(maxWidth, contentWidth + 4))
+    }
+
+    function estimateTableWidthPx(columns: string[], rows: Record<string, string>[]): number {
+      const CHARACTER_PX = 8.2
+      const CELL_HORIZONTAL_PADDING_PX = 24
+      const dragColumnPx = 24
+      const actionColumnPx = 48
+
+      const contentColumnsPx = columns.reduce((total, column) => {
+        return total + estimateColumnWidthCh(column, rows) * CHARACTER_PX + CELL_HORIZONTAL_PADDING_PX
+      }, 0)
+
+      return dragColumnPx + actionColumnPx + contentColumnsPx
+    }
+
     function checkOverflow() {
       if (!wrapperRef.value) return
-      if (tableRef.value) {
-        isOverflow.value = tableRef.value.scrollWidth > wrapperRef.value.clientWidth
+      const wrapperWidth = wrapperRef.value.clientWidth
+      const estimatedWidth = estimateTableWidthPx(props.columns, props.rows)
+      const nextOverflow = isOverflow.value
+        ? estimatedWidth > Math.max(0, wrapperWidth - OVERFLOW_HYSTERESIS_PX)
+        : estimatedWidth > (wrapperWidth + OVERFLOW_HYSTERESIS_PX)
+
+      if (nextOverflow === isOverflow.value) {
+        pendingOverflow = null
+        pendingOverflowFrames = 0
+        return
+      }
+
+      if (pendingOverflow === nextOverflow) {
+        pendingOverflowFrames += 1
       } else {
-        const minWidth = props.columns.length * 120 + 56
-        isOverflow.value = minWidth > wrapperRef.value.clientWidth
+        pendingOverflow = nextOverflow
+        pendingOverflowFrames = 1
+      }
+
+      if (pendingOverflowFrames >= 2) {
+        isOverflow.value = nextOverflow
+        pendingOverflow = null
+        pendingOverflowFrames = 0
       }
     }
 
@@ -69,10 +145,15 @@ export default defineComponent({
     })
 
     watch(() => props.columns, () => nextTick(scheduleCheck))
+    watch(() => props.rows, () => nextTick(scheduleCheck), { deep: true })
 
     function isColumnDisabled(col: string): boolean {
       if (props.disabled) return true
       return !!(props.fieldMeta?.[`var_table:${props.node.id}:${col}`]?.disabled)
+    }
+
+    function estimateColumnWidth(column: string, rows: Record<string, string>[]): string {
+      return `${estimateColumnWidthCh(column, rows)}ch`
     }
 
     function renderCardView(tableName: string, columns: string[], rows: Record<string, string>[], disabled: boolean, messages: AimdRecorderMessages) {
@@ -85,7 +166,7 @@ export default defineComponent({
             h("div", { class: "aimd-rec-card__title" }, [
               h("span", { class: "aimd-rec-card__title-label" }, titleCol),
               h("input", {
-                class: "aimd-rec-card__title-input",
+                class: "aimd-rec-card__input aimd-rec-card__title-input",
                 disabled: isColumnDisabled(titleCol),
                 placeholder: titleCol,
                 value: row[titleCol] ?? "",
@@ -95,17 +176,19 @@ export default defineComponent({
             ]),
             h("button", {
               type: "button",
-              class: "aimd-rec-inline-table__row-btn",
+              class: "aimd-rec-card__delete-btn",
               disabled: disabled || rows.length <= 1,
+              "aria-label": messages.table.deleteRow,
+              title: messages.table.deleteRow,
               onClick: () => emit("remove-row", { tableName, rowIndex, columns }),
-            }, messages.table.deleteRow),
+            }, [renderTrashIcon()]),
           ]),
           h("div", { class: "aimd-rec-card__body" }, restCols.map(col => {
             const colState = props.fieldState?.[`var_table:${tableName}:${col}`]
             return h("div", { key: col, class: "aimd-rec-card__field" }, [
               h("span", { class: "aimd-rec-card__label" }, col),
               h("input", {
-                class: colState?.validationError ? "aimd-rec-table-cell-input aimd-rec-table-cell-input--error" : "aimd-rec-table-cell-input",
+                class: colState?.validationError ? "aimd-rec-card__input aimd-rec-card__input--error" : "aimd-rec-card__input",
                 disabled: isColumnDisabled(col),
                 placeholder: col,
                 value: row[col] ?? "",
@@ -135,6 +218,14 @@ export default defineComponent({
               ...renderCardView(tableName, columns, rows, disabled, messages),
             ])
           : h("table", { ref: tableRef, class: "aimd-field__table-preview aimd-rec-inline-table__table" }, [
+          h("colgroup", [
+            h("col", { class: "aimd-rec-inline-table__drag-col" }),
+            ...columns.map(column => h("col", {
+              key: `${tableName}-col-${column}`,
+              style: { width: estimateColumnWidth(column, rows) },
+            })),
+            h("col", { class: "aimd-rec-inline-table__action-col" }),
+          ]),
           h("thead", [
             h("tr", [
               h("th", { class: "aimd-rec-inline-table__drag-head" }, ""),
@@ -146,7 +237,10 @@ export default defineComponent({
             const rowKey = getVarTableRowKey(row)
             return h("tr", {
               key: `${tableName}-${rowKey}`,
-              class: props.settlingRowKey === rowKey ? "aimd-rec-inline-table__row--settling" : "",
+              class: [
+                "aimd-rec-inline-table__row",
+                props.settlingRowKey === rowKey ? "aimd-rec-inline-table__row--settling" : "",
+              ],
               onDragover: (event: DragEvent) => emit("drag-over", { tableName, rowIndex, event }),
               onDrop: (event: DragEvent) => emit("drag-drop", { tableName, rowIndex, columns, event }),
             }, [
@@ -206,10 +300,12 @@ export default defineComponent({
               h("td", { class: "aimd-rec-inline-table__action-cell" }, [
                 h("button", {
                   type: "button",
-                  class: "aimd-rec-inline-table__row-btn",
+                  class: "aimd-rec-inline-table__icon-btn",
                   disabled: disabled || rows.length <= 1,
+                  "aria-label": messages.table.deleteRow,
+                  title: messages.table.deleteRow,
                   onClick: () => emit("remove-row", { tableName, rowIndex, columns }),
-                }, messages.table.deleteRow),
+                }, [renderTrashIcon()]),
               ]),
             ])
           })),

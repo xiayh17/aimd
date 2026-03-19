@@ -36,6 +36,38 @@ function findVNodeByType(node: any, expectedType: string): any | null {
   return null
 }
 
+function findVNodeByClass(node: any, expectedClass: string): any | null {
+  if (!node || typeof node !== 'object') {
+    return null
+  }
+
+  const classValue = node.props?.class
+  const classes = Array.isArray(classValue)
+    ? classValue
+    : typeof classValue === 'string'
+      ? classValue.split(/\s+/)
+      : []
+
+  if (classes.includes(expectedClass)) {
+    return node
+  }
+
+  const children = Array.isArray(node.children)
+    ? node.children
+    : Array.isArray(node.component?.subTree?.children)
+      ? node.component.subTree.children
+      : []
+
+  for (const child of children) {
+    const match = findVNodeByClass(child, expectedClass)
+    if (match) {
+      return match
+    }
+  }
+
+  return null
+}
+
 function collectVNodeText(node: any): string {
   if (node == null) {
     return ''
@@ -173,6 +205,108 @@ describe('renderToHtmlSync', () => {
     expect(html).toContain('<td')
   })
 
+  it('upgrades markdown alerts into structured callouts', () => {
+    const { html } = renderToHtmlSync(
+      [
+        '> [!TIP|Specimen Field]',
+        '>',
+        '> **用途：** 标记样本编号。',
+        '>',
+        '> - 使用 `specimen_id` 填写记录',
+      ].join('\n'),
+    )
+
+    expect(html).toContain('class="aimd-callout aimd-callout--tip"')
+    expect(html).toContain('class="aimd-callout__badge aimd-callout__badge--tip"')
+    expect(html).toContain('<span class="aimd-callout__title-text">Specimen Field</span>')
+    expect(html).toContain('<div class="aimd-callout__body">')
+    expect(html).toContain('<strong>用途：</strong>')
+    expect(html).toContain('<code>specimen_id</code>')
+  })
+
+  it('supports attribute-style custom titles while keeping first-line body text', () => {
+    const { html } = renderToHtmlSync(
+      [
+        '> [!WARNING]{title="Cold Chain"} Keep samples refrigerated.',
+        '>',
+        '> Temperature drift invalidates the batch.',
+      ].join('\n'),
+    )
+
+    expect(html).toContain('class="aimd-callout aimd-callout--warning"')
+    expect(html).toContain('<span class="aimd-callout__title-text">Cold Chain</span>')
+    expect(html).toContain('<p>Keep samples refrigerated.</p>')
+    expect(html).toContain('Temperature drift invalidates the batch.')
+  })
+
+  it('supports info and abstract callouts with collapsible and icon attributes', () => {
+    const { html } = renderToHtmlSync(
+      [
+        '> [!ABSTRACT]{title="Study Summary", collapsible=true, collapsed=true, icon="document"}',
+        '>',
+        '> This section summarizes the protocol.',
+        '',
+        '> [!INFO|Run Context]{icon="bookmark"}',
+        '>',
+        '> Captured on instrument A.',
+      ].join('\n'),
+    )
+
+    expect(html).toContain('<details class="aimd-callout aimd-callout--abstract aimd-callout--collapsible"')
+    expect(html).toContain('data-aimd-callout-icon="document"')
+    expect(html).toContain('<span class="aimd-callout__title-text">Study Summary</span>')
+    expect(html).toContain('This section summarizes the protocol.')
+    expect(html).toContain('class="aimd-callout aimd-callout--info"')
+    expect(html).toContain('data-aimd-callout-icon="bookmark"')
+    expect(html).toContain('<span class="aimd-callout__title-text">Run Context</span>')
+  })
+
+  it('supports the extended callout type set', () => {
+    const { html } = renderToHtmlSync(
+      [
+        '> [!EXAMPLE|Usage]',
+        '> Example body.',
+        '',
+        '> [!SUCCESS|Completed]',
+        '> Success body.',
+        '',
+        '> [!DANGER|Hazard]',
+        '> Danger body.',
+        '',
+        '> [!BUG|Regression]',
+        '> Bug body.',
+        '',
+        '> [!QUOTE|Reference]',
+        '> Quote body.',
+      ].join('\n'),
+    )
+
+    expect(html).toContain('class="aimd-callout aimd-callout--example"')
+    expect(html).toContain('class="aimd-callout aimd-callout--success"')
+    expect(html).toContain('class="aimd-callout aimd-callout--danger"')
+    expect(html).toContain('class="aimd-callout aimd-callout--bug"')
+    expect(html).toContain('class="aimd-callout aimd-callout--quote"')
+    expect(html).toContain('Example body.')
+    expect(html).toContain('Success body.')
+    expect(html).toContain('Danger body.')
+    expect(html).toContain('Bug body.')
+    expect(html).toContain('Quote body.')
+  })
+
+  it('renders badge-only callouts when no custom or inferred title is present', () => {
+    const { html } = renderToHtmlSync(
+      [
+        '> [!NOTE]',
+        '>',
+        '> - Body only content.',
+      ].join('\n'),
+    )
+
+    expect(html).toContain('aimd-callout__title aimd-callout__title--badge-only')
+    expect(html).not.toContain('aimd-callout__title-text')
+    expect(html).toContain('<li>Body only content.</li>')
+  })
+
   it('supports host custom element renderers for AIMD nodes', () => {
     const { html } = renderToHtmlSync(
       "{{step|verify, 2, title='Verify Output', subtitle='Cross-check', check=True, result=True}}\n\nStep body content.",
@@ -252,6 +386,36 @@ describe('renderToHtmlSync', () => {
     expect(html.indexOf('<hr>')).toBeLessThan(html.indexOf('step-id="step2"'))
   })
 
+  it('absorbs a preceding heading into the next grouped step title', () => {
+    const { html } = renderToHtmlSync(
+      [
+        '## Cell Seeding',
+        '',
+        '{{step|cell_seeding}} Cell Seeding',
+        '',
+        'Plate the cells and continue incubation.',
+      ].join('\n'),
+      {
+        groupStepBodies: true,
+        aimdElementRenderers: {
+          step: createCustomElementAimdRenderer('step-card', (node) => ({
+            'step-id': node.id,
+            title: (node as any).title,
+          }), {
+            container: true,
+            stripDefaultChildren: true,
+          }),
+        },
+      },
+    )
+
+    expect(html).toContain('<step-card')
+    expect(html).toContain('step-id="cell_seeding"')
+    expect(html).toContain('title="Cell Seeding"')
+    expect(html).toContain('Plate the cells and continue incubation.')
+    expect(html).not.toContain('<h2>Cell Seeding</h2>')
+  })
+
   it('can lift block-style var types out of inline paragraphs', () => {
     const { html } = renderToHtmlSync(
       'Experiment summary: {{var|summary: AiralogyMarkdown}}',
@@ -299,6 +463,70 @@ describe('renderToVue', () => {
     const body = card.children[1] as any
     expect(body.props.class).toContain('aimd-step-card__body')
     expect(collectVNodeText(body)).toContain('Step body content.')
+  })
+
+  it('renders markdown alerts as structured callouts in Vue output', async () => {
+    const { nodes } = await renderToVue(
+      [
+        '> [!WARNING|Handling]',
+        '>',
+        '> Double-check every reagent before proceeding.',
+      ].join('\n'),
+    )
+
+    const callout = findVNodeByClass(nodes[0], 'aimd-callout') as any
+    expect(callout).toBeTruthy()
+    expect(callout.props['data-aimd-callout']).toBe('warning')
+
+    const title = findVNodeByClass(callout, 'aimd-callout__title')
+    const body = findVNodeByClass(callout, 'aimd-callout__body')
+    expect(collectVNodeText(title)).toContain('Handling')
+    expect(collectVNodeText(title)).toContain('Warning')
+    expect(collectVNodeText(body)).toContain('Double-check every reagent before proceeding.')
+  })
+
+  it('renders collapsible abstract callouts in Vue output', async () => {
+    const { nodes } = await renderToVue(
+      [
+        '> [!ABSTRACT]{title="Protocol Summary", collapsible=true, icon="document"}',
+        '>',
+        '> Includes the top-level overview.',
+      ].join('\n'),
+    )
+
+    const callout = findVNodeByClass(nodes[0], 'aimd-callout') as any
+    expect(callout).toBeTruthy()
+    expect(callout.type).toBe('details')
+    expect(callout.props['data-aimd-callout']).toBe('abstract')
+    expect(callout.props['data-aimd-callout-collapsible']).toBe('true')
+    expect(callout.props['data-aimd-callout-icon']).toBe('document')
+    expect(collectVNodeText(callout)).toContain('Protocol Summary')
+    expect(collectVNodeText(callout)).toContain('Abstract')
+  })
+
+  it('uses a preceding heading as the grouped step card title without leaking the step id', async () => {
+    const { nodes } = await renderToVue(
+      [
+        '## Cell Seeding',
+        '',
+        '{{step|cell_seeding}} Cell Seeding',
+        '',
+        'Plate the cells and continue incubation.',
+      ].join('\n'),
+      {
+        groupStepBodies: true,
+        aimdRenderers: {
+          step: createStepCardRenderer(),
+        },
+      },
+    )
+
+    expect(nodes).toHaveLength(1)
+    const card = findVNodeByType(nodes[0], 'article') as any
+    expect(card).toBeTruthy()
+    expect(collectVNodeText(card)).toContain('Cell Seeding')
+    expect(collectVNodeText(card)).toContain('Plate the cells and continue incubation.')
+    expect(collectVNodeText(card)).not.toContain('cell_seeding')
   })
 })
 

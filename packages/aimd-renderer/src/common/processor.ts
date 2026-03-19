@@ -19,6 +19,7 @@ import { resolveQuizPreviewOptions } from "./quiz-preview"
 // ---------------------------------------------------------------------------
 
 import { remarkInsertVisibleAssigners, remarkStripAssignerCodeBlocks } from "./assignerVisibility"
+import { transformCalloutBlockquotes } from "./calloutBlockquotes"
 import { highlightVisibleAssigners } from "./assignerHighlighting"
 import { annotateStepReferenceSequence } from "./annotateStepReferences"
 import { buildFigureChildren, assignFigureSequenceNumbers } from "./figureNumbering"
@@ -138,6 +139,13 @@ function isAimdStepElement(node: unknown): node is Element {
     && getPropertyValue((node as Element).properties, "data-aimd-type") === "step"
 }
 
+function isHeadingElement(node: unknown): node is Element {
+  return typeof node === "object"
+    && node !== null
+    && (node as Element).type === "element"
+    && /^h[1-6]$/.test((node as Element).tagName)
+}
+
 function isHeadingOrDivider(node: unknown): boolean {
   if (typeof node !== "object" || node === null || (node as Element).type !== "element") {
     return false
@@ -147,9 +155,58 @@ function isHeadingOrDivider(node: unknown): boolean {
   return tagName === "hr" || /^h[1-6]$/.test(tagName)
 }
 
-function unwrapStandaloneContainerStep(node: unknown): Element | null {
+function collectTextFromNode(node: Element | HastText): string {
+  if (node.type === "text") {
+    return node.value
+  }
+
+  return (node.children || [])
+    .map((child) => (child.type === "element" || child.type === "text") ? collectTextFromNode(child) : "")
+    .join("")
+}
+
+function normalizeInlineText(value: string): string {
+  return value.replace(/\s+/g, " ").trim()
+}
+
+function createTextParagraph(value: string): Element {
+  return {
+    type: "element",
+    tagName: "p",
+    properties: {},
+    children: [{ type: "text", value }],
+  }
+}
+
+function updateStepContainerTitle(stepElement: Element, title: string): void {
+  const nextTitle = normalizeInlineText(title)
+  if (!nextTitle) {
+    return
+  }
+
+  stepElement.properties = {
+    ...stepElement.properties,
+    "data-aimd-title": nextTitle,
+  }
+
+  const aimdNode = getAimdNodeFromElement(stepElement)
+  if (aimdNode && aimdNode.fieldType === "step") {
+    ;(aimdNode as AimdStepNode).title = nextTitle
+    assignAimdNodeData(stepElement, aimdNode)
+    stepElement.properties["data-aimd-json"] = JSON.stringify(aimdNode)
+  }
+}
+
+interface UnwrappedStepContainer {
+  stepElement: Element
+  inlineTitle?: string
+}
+
+function unwrapStandaloneContainerStep(node: unknown): UnwrappedStepContainer | null {
   if (isAimdStepElement(node)) {
-    return getPropertyValue(node.properties, "data-aimd-step-container") === "true" ? node : null
+    return getPropertyValue(node.properties, "data-aimd-step-container") === "true"
+      ? { stepElement: node }
+      : null
   }
 
   if (
@@ -161,17 +218,41 @@ function unwrapStandaloneContainerStep(node: unknown): Element | null {
     return null
   }
 
-  const meaningfulChildren = ((node as Element).children || []).filter((child) => !isWhitespaceTextNode(child))
-  if (meaningfulChildren.length !== 1 || !isAimdStepElement(meaningfulChildren[0])) {
+  const paragraph = node as Element
+  const meaningfulChildren = (paragraph.children || []).filter((child) => !isWhitespaceTextNode(child))
+  if (meaningfulChildren.length === 0 || !isAimdStepElement(meaningfulChildren[0])) {
     return null
   }
 
   const stepElement = meaningfulChildren[0]
-  return getPropertyValue(stepElement.properties, "data-aimd-step-container") === "true" ? stepElement : null
+  if (getPropertyValue(stepElement.properties, "data-aimd-step-container") !== "true") {
+    return null
+  }
+
+  const trailingTitle = normalizeInlineText(
+    meaningfulChildren
+      .slice(1)
+      .map((child) => (child.type === "element" || child.type === "text") ? collectTextFromNode(child) : "")
+      .join(" "),
+  )
+
+  return {
+    stepElement,
+    inlineTitle: trailingTitle || undefined,
+  }
 }
 
 function cloneNodeForStepBody<T extends Element | HastText>(node: T): T {
   return JSON.parse(JSON.stringify(node)) as T
+}
+
+function findLastMeaningfulChildIndex(children: Array<Element | HastText>): number {
+  for (let index = children.length - 1; index >= 0; index -= 1) {
+    if (!isWhitespaceTextNode(children[index])) {
+      return index
+    }
+  }
+  return -1
 }
 
 function groupStepBodiesInParent(parent: HastRoot | Element): void {
@@ -180,9 +261,9 @@ function groupStepBodiesInParent(parent: HastRoot | Element): void {
 
   for (let index = 0; index < originalChildren.length; index += 1) {
     const currentNode = originalChildren[index]
-    const stepContainer = unwrapStandaloneContainerStep(currentNode)
+    const unwrappedStep = unwrapStandaloneContainerStep(currentNode)
 
-    if (!stepContainer) {
+    if (!unwrappedStep) {
       if (typeof currentNode === "object" && currentNode !== null && (currentNode as Element).type === "element") {
         groupStepBodiesInParent(currentNode as Element)
       }
@@ -190,7 +271,34 @@ function groupStepBodiesInParent(parent: HastRoot | Element): void {
       continue
     }
 
-    const bodyChildren: Array<Element | HastText> = []
+    const stepContainer = unwrappedStep.stepElement
+    const existingTitle = getPropertyValue(stepContainer.properties, "data-aimd-title")
+    let resolvedTitle = existingTitle ? normalizeInlineText(existingTitle) : ""
+
+    const inlineTitle = normalizeInlineText(unwrappedStep.inlineTitle || "")
+    const previousMeaningfulIndex = findLastMeaningfulChildIndex(nextChildren)
+    const previousNode = previousMeaningfulIndex >= 0 ? nextChildren[previousMeaningfulIndex] : null
+    if (!resolvedTitle && inlineTitle && isHeadingElement(previousNode)) {
+      const headingTitle = normalizeInlineText(collectTextFromNode(previousNode))
+      if (headingTitle && headingTitle === inlineTitle) {
+        resolvedTitle = headingTitle
+        updateStepContainerTitle(stepContainer, resolvedTitle)
+        nextChildren.splice(previousMeaningfulIndex)
+      }
+    }
+
+    const prefixChildren: Array<Element | HastText> = []
+    if (inlineTitle) {
+      if (!resolvedTitle) {
+        resolvedTitle = inlineTitle
+        updateStepContainerTitle(stepContainer, inlineTitle)
+      }
+      else if (inlineTitle !== resolvedTitle) {
+        prefixChildren.push(createTextParagraph(inlineTitle))
+      }
+    }
+
+    const bodyChildren: Array<Element | HastText> = [...prefixChildren]
     let scanIndex = index + 1
     while (scanIndex < originalChildren.length) {
       const candidate = originalChildren[scanIndex]
@@ -1185,6 +1293,7 @@ export async function renderToHtml(
   const hastTree = await processor.run(tree, file) as HastRoot
 
   const fields = getExtractedFields(file)
+  transformCalloutBlockquotes(hastTree, options)
   annotateStepReferenceSequence(hastTree, fields, options)
   assignFigureSequenceNumbers(hastTree, fields)
   liftBlockVarElements(hastTree, options.blockVarTypes)
@@ -1212,6 +1321,7 @@ export async function renderToVue(
   const hastTree = await processor.run(tree, file) as HastRoot
 
   const fields = getExtractedFields(file)
+  transformCalloutBlockquotes(hastTree, options)
   annotateStepReferenceSequence(hastTree, fields, options)
   assignFigureSequenceNumbers(hastTree, fields)
   liftBlockVarElements(hastTree, options.blockVarTypes)
@@ -1254,6 +1364,7 @@ export function renderToHtmlSync(
   const hastTree = processor.runSync(tree, file) as HastRoot
 
   const fields = getExtractedFields(file)
+  transformCalloutBlockquotes(hastTree, options)
   annotateStepReferenceSequence(hastTree, fields, options)
   assignFigureSequenceNumbers(hastTree, fields)
   liftBlockVarElements(hastTree, options.blockVarTypes)
