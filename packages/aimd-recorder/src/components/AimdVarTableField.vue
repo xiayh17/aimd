@@ -36,30 +36,39 @@ export default defineComponent({
     const tableRef = ref<HTMLElement | null>(null)
     let ro: ResizeObserver | null = null
 
+    let rafId: number | null = null
+
     function checkOverflow() {
       if (!wrapperRef.value) return
       if (tableRef.value) {
-        // table is in DOM, measure directly
         isOverflow.value = tableRef.value.scrollWidth > wrapperRef.value.clientWidth
       } else {
-        // table not in DOM (card view), estimate: each col needs ~120px min
-        const minWidth = props.columns.length * 120 + 56 // 56 = drag + action cols
+        const minWidth = props.columns.length * 120 + 56
         isOverflow.value = minWidth > wrapperRef.value.clientWidth
       }
     }
 
+    function scheduleCheck() {
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        checkOverflow()
+      })
+    }
+
     onMounted(() => {
       if (!wrapperRef.value) return
-      ro = new ResizeObserver(() => checkOverflow())
+      ro = new ResizeObserver(() => scheduleCheck())
       ro.observe(wrapperRef.value)
       nextTick(checkOverflow)
     })
 
     onBeforeUnmount(() => {
       ro?.disconnect()
+      if (rafId !== null) cancelAnimationFrame(rafId)
     })
 
-    watch(() => props.columns, () => nextTick(checkOverflow))
+    watch(() => props.columns, () => nextTick(scheduleCheck))
 
     function isColumnDisabled(col: string): boolean {
       if (props.disabled) return true

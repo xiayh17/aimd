@@ -600,7 +600,16 @@
   border: 1px solid var(--aimd-border-color);
   border-bottom: none;
   background-color: var(--aimd-var-bg);
-  min-height: 28px;
+  min-height: 22px;
+  max-height: 22px;
+  transition: max-height 0.18s ease, opacity 0.18s ease;
+  opacity: 0.45;
+}
+
+.aimd-field-wrapper:hover .aimd-field--no-style.aimd-field__label,
+.aimd-field-wrapper:focus-within .aimd-field--no-style.aimd-field__label {
+  max-height: 40px;
+  opacity: 1;
 }
 
 /* Default scope color for edit mode labels (var type - blue, matches preview) */
@@ -851,6 +860,15 @@
   border: none;
   border-radius: 5px 5px 0 0;
   border-bottom: 1px solid var(--aimd-border-color);
+  max-height: 22px;
+  opacity: 0.45;
+  transition: max-height 0.18s ease, opacity 0.18s ease;
+}
+
+.aimd-field-wrapper.aimd-field-wrapper--inline:hover .aimd-field--no-style.aimd-field__label,
+.aimd-field-wrapper.aimd-field-wrapper--inline:focus-within .aimd-field--no-style.aimd-field__label {
+  max-height: 40px;
+  opacity: 1;
 }
 
 .aimd-field-wrapper--error {
