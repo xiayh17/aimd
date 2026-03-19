@@ -59,7 +59,7 @@ export const AimdStepField = defineComponent({
         ]),
         // content
         h("span", { class: "aimd-rec-step-card__content" }, [
-          h("span", { class: "aimd-rec-step-card__title" }, id),
+          node.title ? h("span", { class: "aimd-rec-step-card__title" }, node.title) : null,
           h("input", {
             "data-rec-focus-key": `step:${id}:annotation`,
             class: "aimd-rec-step-card__annotation",
