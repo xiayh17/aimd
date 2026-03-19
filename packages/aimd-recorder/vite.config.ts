@@ -19,6 +19,7 @@ export default defineConfig({
         '@vueuse/core',
         'naive-ui',
         '@airalogy/aimd-editor',
+        '@airalogy/aimd-editor/vue',
         '@airalogy/aimd-editor/embedded',
         '@airalogy/aimd-editor/wysiwyg',
         '@airalogy/aimd-core',

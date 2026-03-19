@@ -15,7 +15,13 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "jsx": "preserve",
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@airalogy/aimd-editor/vue": ["../aimd-editor/src/vue/index.ts"],
+      "@airalogy/aimd-editor/embedded": ["../aimd-editor/src/embedded.ts"],
+      "@airalogy/aimd-editor/wysiwyg": ["../aimd-editor/src/wysiwyg.ts"],
+      "@airalogy/aimd-editor/monaco": ["../aimd-editor/src/monaco.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

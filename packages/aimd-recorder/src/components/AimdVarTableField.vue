@@ -1,5 +1,5 @@
 <script lang="ts">
-import { defineComponent, h, type PropType, type VNode } from "vue"
+import { defineComponent, h, ref, watch, nextTick, onMounted, onBeforeUnmount, type PropType } from "vue"
 import type { AimdVarTableNode } from "@airalogy/aimd-core/types"
 import type { AimdFieldMeta, AimdFieldState } from "../types"
 import type { AimdRecorderMessages } from "../locales"
@@ -31,9 +31,82 @@ export default defineComponent({
     "drag-end",
   ],
   setup(props, { emit }) {
+    const isOverflow = ref(false)
+    const wrapperRef = ref<HTMLElement | null>(null)
+    const tableRef = ref<HTMLElement | null>(null)
+    let ro: ResizeObserver | null = null
+
+    function checkOverflow() {
+      if (!wrapperRef.value) return
+      if (tableRef.value) {
+        // table is in DOM, measure directly
+        isOverflow.value = tableRef.value.scrollWidth > wrapperRef.value.clientWidth
+      } else {
+        // table not in DOM (card view), estimate: each col needs ~120px min
+        const minWidth = props.columns.length * 120 + 56 // 56 = drag + action cols
+        isOverflow.value = minWidth > wrapperRef.value.clientWidth
+      }
+    }
+
+    onMounted(() => {
+      if (!wrapperRef.value) return
+      ro = new ResizeObserver(() => checkOverflow())
+      ro.observe(wrapperRef.value)
+      nextTick(checkOverflow)
+    })
+
+    onBeforeUnmount(() => {
+      ro?.disconnect()
+    })
+
+    watch(() => props.columns, () => nextTick(checkOverflow))
+
     function isColumnDisabled(col: string): boolean {
       if (props.disabled) return true
       return !!(props.fieldMeta?.[`var_table:${props.node.id}:${col}`]?.disabled)
+    }
+
+    function renderCardView(tableName: string, columns: string[], rows: Record<string, string>[], disabled: boolean, messages: AimdRecorderMessages) {
+      return rows.map((row, rowIndex) => {
+        const rowKey = getVarTableRowKey(row)
+        const titleCol = columns[0]
+        const restCols = columns.slice(1)
+        return h("div", { key: `${tableName}-card-${rowKey}`, class: "aimd-rec-card" }, [
+          h("div", { class: "aimd-rec-card__header" }, [
+            h("div", { class: "aimd-rec-card__title" }, [
+              h("span", { class: "aimd-rec-card__title-label" }, titleCol),
+              h("input", {
+                class: "aimd-rec-card__title-input",
+                disabled: isColumnDisabled(titleCol),
+                placeholder: titleCol,
+                value: row[titleCol] ?? "",
+                onInput: (e: Event) => emit("cell-input", { tableName, column: titleCol, rowIndex, value: (e.target as HTMLInputElement).value, row }),
+                onBlur: () => emit("cell-blur", { tableName, column: titleCol }),
+              }),
+            ]),
+            h("button", {
+              type: "button",
+              class: "aimd-rec-inline-table__row-btn",
+              disabled: disabled || rows.length <= 1,
+              onClick: () => emit("remove-row", { tableName, rowIndex, columns }),
+            }, messages.table.deleteRow),
+          ]),
+          h("div", { class: "aimd-rec-card__body" }, restCols.map(col => {
+            const colState = props.fieldState?.[`var_table:${tableName}:${col}`]
+            return h("div", { key: col, class: "aimd-rec-card__field" }, [
+              h("span", { class: "aimd-rec-card__label" }, col),
+              h("input", {
+                class: colState?.validationError ? "aimd-rec-table-cell-input aimd-rec-table-cell-input--error" : "aimd-rec-table-cell-input",
+                disabled: isColumnDisabled(col),
+                placeholder: col,
+                value: row[col] ?? "",
+                onInput: (e: Event) => emit("cell-input", { tableName, column: col, rowIndex, value: (e.target as HTMLInputElement).value, row }),
+                onBlur: () => emit("cell-blur", { tableName, column: col }),
+              }),
+            ])
+          })),
+        ])
+      })
     }
 
     return () => {
@@ -43,12 +116,16 @@ export default defineComponent({
       const disabled = props.disabled
       const messages = props.messages
 
-      return h("div", { class: "aimd-field aimd-field--var-table aimd-rec-inline-table" }, [
+      return h("div", { ref: wrapperRef, class: "aimd-field aimd-field--var-table aimd-rec-inline-table" }, [
         h("div", { class: "aimd-field__header" }, [
           h("span", { class: "aimd-field__scope" }, getAimdRecorderScopeLabel("var_table", messages)),
           h("span", { class: "aimd-field__name" }, tableName),
         ]),
-        h("table", { class: "aimd-field__table-preview aimd-rec-inline-table__table" }, [
+        isOverflow.value
+          ? h("div", { class: "aimd-rec-card-list" }, [
+              ...renderCardView(tableName, columns, rows, disabled, messages),
+            ])
+          : h("table", { ref: tableRef, class: "aimd-field__table-preview aimd-rec-inline-table__table" }, [
           h("thead", [
             h("tr", [
               h("th", { class: "aimd-rec-inline-table__drag-head" }, ""),
