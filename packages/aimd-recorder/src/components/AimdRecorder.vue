@@ -29,10 +29,12 @@ import type {
 import { createEmptyProtocolRecordData } from "../types"
 import {
   applyIncomingRecord,
+  applyPastedVarTableGrid,
   cloneRecordData,
   ensureDefaultsFromFields,
   getRecordDataSignature,
   getQuizDefaultValue,
+  parsePastedVarTableText,
 } from "../composables/useRecordState"
 import {
   getVarInputKind,
@@ -417,6 +419,7 @@ function renderInlineVarTable(node: AimdVarTableNode): VNode {
   const columns = getVarTableColumns(node)
   const rows = tableDragDrop.ensureVarTableRows(tableName, columns)
   const disabled = fieldRendering.isFieldDisabled(fieldKey)
+  const disabledColumns = columns.filter(column => !!props.fieldMeta?.[`var_table:${tableName}:${column}`]?.disabled)
 
   const vnode = h(AimdVarTableField, {
     node,
@@ -436,6 +439,40 @@ function renderInlineVarTable(node: AimdVarTableNode): VNode {
         fieldKey: `${payload.tableName}:${payload.column}`,
         value: payload.value,
       })
+    },
+    onCellPaste: (payload: { tableName: string, column: string, rowIndex: number, text: string }) => {
+      const startColumnIndex = columns.indexOf(payload.column)
+      if (startColumnIndex < 0) {
+        return
+      }
+
+      const pastedGrid = parsePastedVarTableText(payload.text)
+      const result = applyPastedVarTableGrid(
+        rows,
+        columns,
+        payload.rowIndex,
+        startColumnIndex,
+        pastedGrid,
+        { disabledColumns },
+      )
+
+      if (result.rowsAdded === 0 && result.changedCells.length === 0) {
+        return
+      }
+
+      // Var tables are rendered through rebuilt inline VNodes, so pasted updates
+      // need a refresh even when they only overwrite existing cells.
+      markRecordChanged({ rebuild: true, runClientAssigners: true })
+      for (let index = 0; index < result.rowsAdded; index += 1) {
+        emit("table-add-row", { tableName: payload.tableName, columns })
+      }
+      for (const cell of result.changedCells) {
+        emit("field-change", {
+          section: "var_table",
+          fieldKey: `${payload.tableName}:${cell.column}`,
+          value: cell.value,
+        })
+      }
     },
     onCellBlur: (payload: { tableName: string, column: string }) => {
       emit("field-blur", { section: "var_table", fieldKey: `${payload.tableName}:${payload.column}` })

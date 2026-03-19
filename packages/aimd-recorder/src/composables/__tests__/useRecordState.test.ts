@@ -16,6 +16,8 @@ import {
   ensureDefaultsFromFields,
   createEmptyVarTableRow,
   normalizeVarTableRows,
+  parsePastedVarTableText,
+  applyPastedVarTableGrid,
 } from '../useRecordState'
 import { createEmptyProtocolRecordData } from '../../types'
 
@@ -438,6 +440,68 @@ describe('normalizeVarTableRows', () => {
   it('replaces invalid row items with empty rows', () => {
     const rows = normalizeVarTableRows([null, 'bad', { x: 'ok' }], ['x'])
     expect(rows).toEqual([{ x: '' }, { x: '' }, { x: 'ok' }])
+  })
+})
+
+describe('parsePastedVarTableText', () => {
+  it('parses spreadsheet-style tabular text', () => {
+    expect(parsePastedVarTableText('A\tB\r\n1\t2\r\n')).toEqual([
+      ['A', 'B'],
+      ['1', '2'],
+    ])
+  })
+
+  it('keeps single-column multiline text as one column per row', () => {
+    expect(parsePastedVarTableText('alpha\nbeta')).toEqual([
+      ['alpha'],
+      ['beta'],
+    ])
+  })
+})
+
+describe('applyPastedVarTableGrid', () => {
+  it('applies pasted cells from the current cell and appends rows as needed', () => {
+    const rows = [{ sample: 'S1', value: '' }]
+    const result = applyPastedVarTableGrid(
+      rows,
+      ['sample', 'value'],
+      0,
+      1,
+      [['10'], ['20']],
+    )
+
+    expect(rows).toEqual([
+      { sample: 'S1', value: '10' },
+      { sample: '', value: '20' },
+    ])
+    expect(result).toEqual({
+      rowsAdded: 1,
+      changedCells: [
+        { rowIndex: 0, column: 'value', value: '10' },
+        { rowIndex: 1, column: 'value', value: '20' },
+      ],
+    })
+  })
+
+  it('skips disabled columns and ignores cells outside the table width', () => {
+    const rows = [{ a: '', b: '', c: '' }]
+    const result = applyPastedVarTableGrid(
+      rows,
+      ['a', 'b', 'c'],
+      0,
+      0,
+      [['x', 'y', 'z', 'overflow']],
+      { disabledColumns: ['b'] },
+    )
+
+    expect(rows).toEqual([{ a: 'x', b: '', c: 'z' }])
+    expect(result).toEqual({
+      rowsAdded: 0,
+      changedCells: [
+        { rowIndex: 0, column: 'a', value: 'x' },
+        { rowIndex: 0, column: 'c', value: 'z' },
+      ],
+    })
   })
 })
 
