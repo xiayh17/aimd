@@ -19,6 +19,13 @@ export interface AimdFieldType extends AimdFieldTypeDefinition {
   desc: string
 }
 
+export interface AimdVarTypePresetOption {
+  key: string
+  value: string
+  label: string
+  desc: string
+}
+
 export interface MdToolbarItemDefinition {
   action: string
   style?: string
@@ -58,6 +65,8 @@ export interface AimdEditorProps {
   readonly?: boolean
   /** Monaco editor options override */
   monacoOptions?: Record<string, any>
+  /** Additional var type presets shown in the insertion dialog */
+  varTypePlugins?: AimdVarTypePresetOption[]
 }
 
 export interface AimdEditorEmits {
@@ -132,6 +141,49 @@ export function createMdToolbarItems(
       title: title || item.action,
     }
   })
+}
+
+export function createAimdVarTypePresets(
+  messages: Pick<AimdEditorMessages, 'varTypePresets'> = DEFAULT_EDITOR_MESSAGES,
+  customPresets: AimdVarTypePresetOption[] = [],
+): AimdVarTypePresetOption[] {
+  const defaults: AimdVarTypePresetOption[] = [
+    { key: 'str', value: 'str', ...messages.varTypePresets.str },
+    { key: 'int', value: 'int', ...messages.varTypePresets.int },
+    { key: 'float', value: 'float', ...messages.varTypePresets.float },
+    { key: 'bool', value: 'bool', ...messages.varTypePresets.bool },
+    { key: 'date', value: 'date', ...messages.varTypePresets.date },
+    { key: 'datetime', value: 'datetime', ...messages.varTypePresets.datetime },
+    { key: 'time', value: 'time', ...messages.varTypePresets.time },
+    { key: 'dnaSequence', value: 'DNASequence', ...messages.varTypePresets.dnaSequence },
+    { key: 'currentTime', value: 'CurrentTime', ...messages.varTypePresets.currentTime },
+    { key: 'userName', value: 'UserName', ...messages.varTypePresets.userName },
+    { key: 'airalogyMarkdown', value: 'AiralogyMarkdown', ...messages.varTypePresets.airalogyMarkdown },
+  ]
+
+  const indexByValue = new Map<string, number>()
+  const merged = defaults.map((preset, index) => {
+    indexByValue.set(normalizeVarTypePresetValue(preset.value), index)
+    return preset
+  })
+
+  for (const preset of customPresets) {
+    const normalized = normalizeVarTypePresetValue(preset.value)
+    const existingIndex = indexByValue.get(normalized)
+    if (typeof existingIndex === 'number') {
+      merged[existingIndex] = preset
+      continue
+    }
+
+    indexByValue.set(normalized, merged.length)
+    merged.push(preset)
+  }
+
+  return merged
+}
+
+function normalizeVarTypePresetValue(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_-]/g, '')
 }
 
 // Backwards-compatible English defaults. Prefer the factory helpers above.

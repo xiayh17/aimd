@@ -16,6 +16,7 @@ export {
   MD_TOOLBAR_ITEM_DEFINITIONS,
   MD_TOOLBAR_ITEMS,
   createAimdFieldTypes,
+  createAimdVarTypePresets,
   createMdToolbarItems,
   getDefaultAimdFields,
   buildAimdSyntax,
@@ -24,6 +25,7 @@ export {
 export type {
   AimdFieldTypeDefinition,
   AimdFieldType,
+  AimdVarTypePresetOption,
   MdToolbarItemDefinition,
   MdToolbarItem,
   AimdEditorProps,

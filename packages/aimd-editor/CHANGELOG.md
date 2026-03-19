@@ -2,6 +2,13 @@
 
 All notable changes to `@airalogy/aimd-editor` will be documented in this file.
 
+## [1.4.0] - 2026-03-19
+
+### Added
+
+- Added `varTypePlugins` on `AimdEditor` / `AimdFieldDialog` so host applications can surface custom type presets in the insertion dialog without changing AIMD syntax itself.
+- Exported `createAimdVarTypePresets(...)` and the typed preset shape for reusable custom type suggestion UIs.
+
 ## [1.3.0] - 2026-03-17
 
 ### Added

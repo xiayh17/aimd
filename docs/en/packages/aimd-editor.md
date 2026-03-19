@@ -99,6 +99,13 @@ const fieldTypes = createAimdFieldTypes(messages)
 const toolbarItems = createMdToolbarItems(messages)
 ```
 
+Custom var type presets for the insertion dialog can be built with `createAimdVarTypePresets(...)`.
+Its job is simple: generate the data for the type preset cards shown in the `var` insertion panel, then pass that data into `AimdEditor` through `varTypePlugins`.
+
+See also:
+
+- [`Type Plugins`](/en/packages/type-plugins)
+
 ## Notes
 
 - AIMD syntax keywords remain English, such as `type: choice` and `mode: single`.

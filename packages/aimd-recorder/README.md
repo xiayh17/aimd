@@ -122,6 +122,12 @@ const fieldAdapters = {
 
 Pass `fieldAdapters` to `AimdRecorder` when the host app needs to replace or wrap built-in recorder field UIs while still using AIMD parsing and record-state management.
 
+If the host app needs per-type behavior instead, use `typePlugins`. A type plugin can define the initial value, normalization, display/parsing hooks, and even a dedicated widget for one specific AIMD type token.
+
+See:
+
+- `aimd/docs/en/packages/type-plugins.md`
+
 ### Quiz Recorder Only
 
 ```vue

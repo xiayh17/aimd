@@ -50,6 +50,8 @@ export interface AimdProtocolRecordData {
   quiz: Record<string, unknown>
 }
 
+export type AimdVarInputKind = "text" | "number" | "checkbox" | "textarea" | "date" | "datetime" | "time" | "dna"
+
 export function createEmptyProtocolRecordData(): AimdProtocolRecordData {
   return {
     var: {},
@@ -65,7 +67,7 @@ export function createEmptyProtocolRecordData(): AimdProtocolRecordData {
 
 /** Field metadata — app passes via prop to describe extra field info */
 export interface AimdFieldMeta {
-  inputType?: string           // override input type: 'file' | 'enum' | 'number' | 'markdown' | 'dna'
+  inputType?: string           // override built-in input kind or a host-defined custom type mapping
   required?: boolean
   pattern?: string             // regex validation
   enumOptions?: Array<{ label: string; value: unknown }>
@@ -107,6 +109,51 @@ export interface AimdRecorderFieldNodeMap {
 }
 
 export type AimdRecorderFieldNode = AimdRecorderFieldNodeMap[keyof AimdRecorderFieldNodeMap]
+
+export interface AimdTypePluginInitContext {
+  type: string
+  normalizedType: string
+  fieldKey: string
+  node: AimdVarNode
+  fieldMeta?: AimdFieldMeta
+  currentUserName?: string
+  now?: Date | string | number
+}
+
+export interface AimdTypePluginValueContext extends AimdTypePluginInitContext {
+  value: unknown
+  inputKind: AimdVarInputKind
+}
+
+export interface AimdTypePluginParseContext extends AimdTypePluginInitContext {
+  rawValue: string
+  inputKind: AimdVarInputKind
+}
+
+export interface AimdTypePluginRenderContext extends AimdTypePluginValueContext {
+  readonly: boolean
+  disabled: boolean
+  locale: string
+  messages: AimdRecorderMessages
+  record: AimdProtocolRecordData
+  displayValue: string | number
+  extraClasses: string[]
+  placeholder?: string
+  fieldState?: AimdFieldState
+  emitChange: (value: unknown) => void
+  emitBlur: () => void
+}
+
+export interface AimdTypePlugin {
+  type: string
+  aliases?: string[]
+  inputKind?: AimdVarInputKind
+  getInitialValue?: (context: AimdTypePluginInitContext) => unknown
+  normalizeValue?: (context: AimdTypePluginValueContext) => unknown
+  getDisplayValue?: (context: AimdTypePluginValueContext) => string | number
+  parseInputValue?: (context: AimdTypePluginParseContext) => unknown
+  renderField?: (context: AimdTypePluginRenderContext) => VNode | null | undefined
+}
 
 export interface AimdRecorderFieldAdapterContext<TFieldType extends AimdRecorderFieldType = AimdRecorderFieldType> {
   fieldType: TFieldType

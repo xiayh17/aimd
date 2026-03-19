@@ -99,6 +99,13 @@ const fieldTypes = createAimdFieldTypes(messages)
 const toolbarItems = createMdToolbarItems(messages)
 ```
 
+如果希望扩展插入面板中的自定义 `var` 类型预设，可以使用 `createAimdVarTypePresets(...)`。
+它的用途很简单：生成“`var` 插入面板里那些类型预设卡片”的数据，然后再通过 `AimdEditor` 的 `varTypePlugins` 传入。
+
+另见：
+
+- [`Type Plugins`](/zh/packages/type-plugins)
+
 ## 说明
 
 - AIMD 协议语法关键字保持英文，例如 `type: choice`、`mode: single`。

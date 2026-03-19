@@ -150,6 +150,16 @@ import { AimdRecorder } from "@airalogy/aimd-recorder"
 
 ## 进阶
 
+### Type Plugins
+
+如果宿主应用需要的是“某个 type 的专用行为”，而不是整体替换整类字段 UI，那么应该使用 `typePlugins`。
+
+type plugin 可以为单个 AIMD 类型定义初始值、归一化逻辑、显示/解析钩子，甚至完整的自定义 recorder widget。
+
+完整架构说明和端到端示例请参考：
+
+- [`Type Plugins`](/zh/packages/type-plugins)
+
 如果需要微调 recorder 的内建标签，也可以覆盖 `messages`：
 
 ```vue

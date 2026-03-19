@@ -1,11 +1,37 @@
+import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
-import tsconfigPaths from 'vite-tsconfig-paths'
+
+const projects = [
+  {
+    name: 'aimd-core',
+    root: resolve(__dirname, 'packages/aimd-core'),
+    extends: resolve(__dirname, 'packages/aimd-core/vitest.config.ts'),
+  },
+  {
+    name: 'aimd-renderer',
+    root: resolve(__dirname, 'packages/aimd-renderer'),
+    extends: resolve(__dirname, 'packages/aimd-renderer/vitest.config.ts'),
+  },
+  {
+    name: 'aimd-editor',
+    root: resolve(__dirname, 'packages/aimd-editor'),
+    extends: resolve(__dirname, 'packages/aimd-editor/vitest.config.ts'),
+  },
+  {
+    name: 'aimd-recorder',
+    root: resolve(__dirname, 'packages/aimd-recorder'),
+    extends: resolve(__dirname, 'packages/aimd-recorder/vitest.config.ts'),
+  },
+]
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
   test: {
-    include: ['packages/*/src/**/*.test.ts'],
-    exclude: ['**/node_modules/**', '**/*.mjs'],
-    environment: 'happy-dom',
+    projects: projects.map(project => ({
+      extends: project.extends,
+      root: project.root,
+      test: {
+        name: project.name,
+      },
+    })),
   },
 })

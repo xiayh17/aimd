@@ -2,6 +2,17 @@
 
 All notable changes to `@airalogy/aimd-recorder` will be documented in this file.
 
+## [1.8.0] - 2026-03-19
+
+### Added
+
+- Added `typePlugins` on `AimdRecorder` so host applications can attach per-type initialization, normalization, display/parsing hooks, and dedicated widgets for custom AIMD var types.
+- Exported recorder-side type plugin helpers and types so custom recorder integrations can share a stable typed contract.
+
+### Changed
+
+- Migrated built-in `CurrentTime`, `UserName`, `AiralogyMarkdown`, and `DNASequence` recorder behavior onto the same type-plugin path used by custom types.
+
 ## [1.7.0] - 2026-03-19
 
 ### Added

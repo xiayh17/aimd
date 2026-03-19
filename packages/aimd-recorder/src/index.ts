@@ -23,6 +23,12 @@ export {
 } from './locales'
 export type {
   AimdProtocolRecordData,
+  AimdTypePlugin,
+  AimdTypePluginInitContext,
+  AimdTypePluginParseContext,
+  AimdTypePluginRenderContext,
+  AimdTypePluginValueContext,
+  AimdVarInputKind,
   AimdRecorderFieldAdapter,
   AimdRecorderFieldAdapterContext,
   AimdRecorderFieldAdapters,
@@ -40,6 +46,11 @@ export type {
   TableEventPayload,
 } from './types'
 export { createEmptyProtocolRecordData } from './types'
+export {
+  BUILT_IN_AIMD_TYPE_PLUGINS,
+  createAimdTypePlugins,
+  resolveAimdTypePlugin,
+} from './type-plugins'
 export type {
   AimdRecorderI18nOptions,
   AimdRecorderLocale,

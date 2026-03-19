@@ -12,6 +12,7 @@ export default [
           { text: '迁移说明', link: '/zh/packages/aimd-core/compatibility' },
         ],
       },
+      { text: '类型插件', link: '/zh/packages/type-plugins' },
       { text: '@airalogy/aimd-editor', link: '/zh/packages/aimd-editor' },
       { text: '@airalogy/aimd-renderer', link: '/zh/packages/aimd-renderer' },
       { text: '@airalogy/aimd-recorder', link: '/zh/packages/aimd-recorder' },

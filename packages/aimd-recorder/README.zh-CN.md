@@ -122,6 +122,12 @@ const fieldAdapters = {
 
 当宿主应用需要替换或包裹内建字段 UI，但仍希望继续复用 AIMD 解析和 recorder record-state 管理时，可以把 `fieldAdapters` 传给 `AimdRecorder`。
 
+如果宿主应用需要的是某个具体类型的行为扩展，而不是整体替换某类字段 UI，则应该使用 `typePlugins`。type plugin 可以为单个 AIMD 类型定义初始值、归一化、显示/解析钩子，甚至完整的专用 widget。
+
+参见：
+
+- `aimd/docs/zh/packages/type-plugins.md`
+
 ### 仅题目控件
 
 ```vue

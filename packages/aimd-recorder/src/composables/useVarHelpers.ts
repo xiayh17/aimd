@@ -5,21 +5,93 @@
  * the recorder and the host-app rendering pipeline.
  */
 
+import { resolveAimdTypePlugin } from '../type-plugins'
+import { normalizeAimdTypeName } from '../type-utils'
+import type { AimdTypePlugin, AimdTypePluginParseContext, AimdTypePluginValueContext, AimdVarInputKind } from '../types'
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type VarInputKind = "text" | "number" | "checkbox" | "textarea" | "date" | "datetime" | "time" | "dna"
+export type VarInputKind = AimdVarInputKind
+
+export interface VarInputKindOptions {
+  inputType?: string
+  typePlugin?: AimdTypePlugin
+  typePlugins?: AimdTypePlugin[]
+}
+
+export interface VarInputValueOptions extends VarInputKindOptions {
+  type?: string
+  nodeFieldKey?: string
+  fieldMeta?: Record<string, unknown>
+}
+
+function resolveOverrideInputKind(inputType: string | undefined): VarInputKind | undefined {
+  const normalized = normalizeAimdTypeName(inputType)
+
+  if (!normalized) {
+    return undefined
+  }
+
+  if (normalized === 'float' || normalized === 'int' || normalized === 'integer' || normalized === 'number') {
+    return 'number'
+  }
+
+  if (normalized === 'bool' || normalized === 'boolean' || normalized === 'checkbox') {
+    return 'checkbox'
+  }
+
+  if (normalized === 'date') {
+    return 'date'
+  }
+
+  if (normalized === 'datetime') {
+    return 'datetime'
+  }
+
+  if (normalized === 'time') {
+    return 'time'
+  }
+
+  if (normalized === 'markdown' || normalized === 'textarea' || normalized === 'md') {
+    return 'textarea'
+  }
+
+  if (normalized === 'dna') {
+    return 'dna'
+  }
+
+  if (normalized === 'file') {
+    return 'text'
+  }
+
+  if (normalized === 'text' || normalized === 'string') {
+    return 'text'
+  }
+
+  return undefined
+}
 
 // ---------------------------------------------------------------------------
 // Type normalisation & input-kind resolution
 // ---------------------------------------------------------------------------
 
 export function normalizeVarTypeName(type: string | undefined): string {
-  return (type || "str").trim().toLowerCase().replace(/[\s_-]/g, "")
+  return normalizeAimdTypeName(type)
 }
 
-export function getVarInputKind(type: string | undefined): VarInputKind {
+export function getVarInputKind(type: string | undefined, options: VarInputKindOptions = {}): VarInputKind {
+  const override = resolveOverrideInputKind(options.inputType)
+  if (override) {
+    return override
+  }
+
+  const typePlugin = options.typePlugin ?? resolveAimdTypePlugin(type, options.typePlugins)
+  if (typePlugin?.inputKind) {
+    return typePlugin.inputKind
+  }
+
   const normalized = normalizeVarTypeName(type)
 
   if (normalized === "float" || normalized === "int" || normalized === "integer" || normalized === "number") {
@@ -205,7 +277,25 @@ export function formatDateForInput(value: unknown, kind: "date" | "datetime" | "
 // Display / parse values
 // ---------------------------------------------------------------------------
 
-export function getVarInputDisplayValue(value: unknown, kind: VarInputKind): string | number {
+export function getVarInputDisplayValue(
+  value: unknown,
+  kind: VarInputKind,
+  options: VarInputValueOptions = {},
+): string | number {
+  const typePlugin = options.typePlugin
+  if (typePlugin?.getDisplayValue) {
+    const context: AimdTypePluginValueContext = {
+      type: options.type || 'str',
+      normalizedType: normalizeVarTypeName(options.type),
+      fieldKey: options.nodeFieldKey ?? '',
+      node: {} as never,
+      value,
+      inputKind: kind,
+      fieldMeta: options.fieldMeta as never,
+    }
+    return typePlugin.getDisplayValue(context)
+  }
+
   const normalized = unwrapStructuredValue(value)
 
   if (kind === "date" || kind === "datetime" || kind === "time") {
@@ -231,7 +321,26 @@ export function getVarInputDisplayValue(value: unknown, kind: VarInputKind): str
   return String(normalized)
 }
 
-export function parseVarInputValue(rawValue: string, type: string | undefined, kind: VarInputKind): unknown {
+export function parseVarInputValue(
+  rawValue: string,
+  type: string | undefined,
+  kind: VarInputKind,
+  options: VarInputValueOptions = {},
+): unknown {
+  const typePlugin = options.typePlugin ?? resolveAimdTypePlugin(type, options.typePlugins)
+  if (typePlugin?.parseInputValue) {
+    const context: AimdTypePluginParseContext = {
+      type: type || 'str',
+      normalizedType: normalizeVarTypeName(type),
+      fieldKey: options.nodeFieldKey ?? '',
+      node: {} as never,
+      rawValue,
+      inputKind: kind,
+      fieldMeta: options.fieldMeta as never,
+    }
+    return typePlugin.parseInputValue(context)
+  }
+
   const normalizedType = normalizeVarTypeName(type)
 
   if (kind === "datetime") {

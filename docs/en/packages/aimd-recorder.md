@@ -121,6 +121,16 @@ Both `AimdRecorder` and `AimdQuizRecorder` accept `locale` to switch built-in re
 
 ## Advanced
 
+### Type Plugins
+
+Use `typePlugins` when a host app needs per-type behavior rather than whole-field replacement.
+
+Type plugins can define a custom initial value, normalization logic, display/parsing hooks, and even a fully custom recorder widget for one AIMD type token.
+
+For the architecture and an end-to-end example, see:
+
+- [`Type Plugins`](/en/packages/type-plugins)
+
 If you need to fine-tune built-in recorder labels, override `messages`:
 
 ```vue

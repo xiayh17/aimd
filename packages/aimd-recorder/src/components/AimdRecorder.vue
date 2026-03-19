@@ -21,6 +21,7 @@ import type {
   AimdFieldMeta,
   AimdFieldState,
   AimdRecorderFieldAdapters,
+  AimdTypePlugin,
   AimdProtocolRecordData,
   FieldEventPayload,
   TableEventPayload,
@@ -34,6 +35,7 @@ import {
 } from "../composables/useRecordState"
 import {
   getVarInputKind,
+  normalizeVarTypeName,
   normalizeDateTimeValueWithTimezone,
 } from "../composables/useVarHelpers"
 import {
@@ -41,11 +43,11 @@ import {
   restoreFocusSnapshot,
 } from "../composables/useFocusManagement"
 import type { FocusSnapshot } from "../composables/useFocusManagement"
-import { normalizeDnaSequenceValue } from "../composables/useDnaSequence"
 import { useClientAssignerRunner } from "../composables/useClientAssignerRunner"
 import { resolveAimdRecorderFieldVNode } from "../composables/useFieldAdapters"
 import { useVarTableDragDrop, getVarTableColumns } from "../composables/useVarTableDragDrop"
 import { useFieldRendering } from "../composables/useFieldRendering"
+import { createAimdTypePlugins } from "../type-plugins"
 import AimdVarField from "./AimdVarField.vue"
 import AimdVarTableField from "./AimdVarTableField.vue"
 import { AimdStepField, AimdCheckField } from "./AimdStepCheckField.vue"
@@ -106,6 +108,12 @@ const props = withDefaults(defineProps<{
    * Reserved for future file-type field support.
    */
   resolveFile?: (src: string) => string | null
+
+  /**
+   * Type-level plugins for custom var types.
+   * Plugins can define initialization, normalization, display, parsing, and full custom field widgets.
+   */
+  typePlugins?: AimdTypePlugin[]
 }>(), {
   modelValue: undefined,
   readonly: false,
@@ -119,6 +127,7 @@ const props = withDefaults(defineProps<{
   customRenderers: undefined,
   fieldAdapters: undefined,
   resolveFile: undefined,
+  typePlugins: undefined,
 })
 
 const emit = defineEmits<{
@@ -166,6 +175,7 @@ let pendingInlineBuildRequestId: number | null = null
 
 const resolvedLocale = computed(() => resolveAimdRecorderLocale(props.locale))
 const resolvedMessages = computed(() => createAimdRecorderMessages(resolvedLocale.value, props.messages))
+const resolvedTypePlugins = computed(() => createAimdTypePlugins(props.typePlugins))
 
 function applyFieldAdapter<TFieldType extends "var" | "var_table" | "step" | "check" | "quiz">(
   fieldType: TFieldType,
@@ -260,6 +270,7 @@ const fieldRendering = useFieldRendering({
   now: () => props.now,
   fieldMeta: () => props.fieldMeta,
   fieldState: () => props.fieldState,
+  typePlugins: () => resolvedTypePlugins.value,
   wrapField: () => props.wrapField,
 })
 
@@ -270,6 +281,7 @@ const fieldRendering = useFieldRendering({
 function renderInlineVar(node: AimdVarNode): VNode {
   const id = node.id
   const fieldKey = `var:${id}`
+  const meta = props.fieldMeta?.[fieldKey]
 
   // 1. Custom renderer override
   if (props.customRenderers?.var) {
@@ -278,12 +290,28 @@ function renderInlineVar(node: AimdVarNode): VNode {
   }
 
   const type = node.definition?.type || "str"
-  const inputKind = getVarInputKind(type)
+  const typePlugin = fieldRendering.getTypePlugin(fieldKey, type)
+  const inputKind = getVarInputKind(type, {
+    inputType: meta?.inputType,
+    typePlugin,
+  })
+  const placeholder = meta?.placeholder ?? fieldRendering.getVarPlaceholder(node)
+
+  function emitVarChange(value: unknown) {
+    fieldRendering.clearVarInputDisplayOverride(id)
+    localRecord.var[id] = value
+    markRecordChanged({ runClientAssigners: true })
+    emit("field-change", { section: "var", fieldKey: id, value })
+  }
+
+  function emitVarBlur() {
+    emit("field-blur", { section: "var", fieldKey: id })
+  }
 
   // 2. Initialise value
   if (!(id in localRecord.var)) {
-    localRecord.var[id] = fieldRendering.getVarInitialValue(node, type)
-    const initialDisplayOverride = fieldRendering.getVarInitialDisplayOverride(node, type)
+    localRecord.var[id] = fieldRendering.getVarInitialValue(node, type, fieldKey)
+    const initialDisplayOverride = fieldRendering.getVarInitialDisplayOverride(node, type, fieldKey)
     if (initialDisplayOverride) {
       fieldRendering.setVarInputDisplayOverride(id, initialDisplayOverride)
     }
@@ -296,18 +324,57 @@ function renderInlineVar(node: AimdVarNode): VNode {
       recordInitializedDuringRender = true
     }
   }
-  if (inputKind === "dna") {
-    const normalizedValue = normalizeDnaSequenceValue(localRecord.var[id])
-    if (JSON.stringify(normalizedValue) !== JSON.stringify(localRecord.var[id])) {
-      localRecord.var[id] = normalizedValue
-      recordInitializedDuringRender = true
-    }
+  const normalizedValue = fieldRendering.normalizeVarValue(
+    node,
+    type,
+    fieldKey,
+    localRecord.var[id],
+    inputKind,
+  )
+  if (JSON.stringify(normalizedValue) !== JSON.stringify(localRecord.var[id])) {
+    localRecord.var[id] = normalizedValue
+    recordInitializedDuringRender = true
   }
 
-  const displayValue = fieldRendering.getVarDisplayValue(id, localRecord.var[id], inputKind)
+  const displayValue = fieldRendering.getVarDisplayValue(
+    id,
+    node,
+    type,
+    localRecord.var[id],
+    inputKind,
+    fieldKey,
+  )
   const disabled = fieldRendering.isFieldDisabled(fieldKey)
   const extraClasses = fieldRendering.fieldStateClasses(fieldKey)
-  const meta = props.fieldMeta?.[fieldKey]
+
+  if (typePlugin?.renderField) {
+    const pluginVNode = typePlugin.renderField({
+      type,
+      normalizedType: normalizeVarTypeName(type),
+      fieldKey,
+      node,
+      value: localRecord.var[id],
+      inputKind,
+      fieldMeta: meta,
+      currentUserName: props.currentUserName,
+      now: props.now,
+      readonly: props.readonly,
+      disabled,
+      locale: resolvedLocale.value,
+      messages: resolvedMessages.value,
+      record: localRecord,
+      displayValue,
+      extraClasses,
+      placeholder,
+      fieldState: props.fieldState?.[fieldKey],
+      emitChange: emitVarChange,
+      emitBlur: emitVarBlur,
+    })
+
+    if (pluginVNode) {
+      return applyFieldAdapter("var", fieldKey, node, localRecord.var[id], pluginVNode)
+    }
+  }
 
   const vnode = h(AimdVarField, {
     node,
@@ -317,21 +384,13 @@ function renderInlineVar(node: AimdVarNode): VNode {
     messages: resolvedMessages.value,
     fieldMeta: meta,
     displayValue,
+    inputKind,
+    typePlugin,
     initialized: id in localRecord.var,
     onChange: (payload: { id: string, value: unknown, type: string, inputKind: string }) => {
-      fieldRendering.clearVarInputDisplayOverride(payload.id)
-      localRecord.var[payload.id] = payload.value
-      markRecordChanged({ runClientAssigners: true })
-      emit("field-change", { section: "var", fieldKey: payload.id, value: payload.value })
+      emitVarChange(payload.value)
     },
-    onBlur: (payload: { id: string }) => {
-      emit("field-blur", { section: "var", fieldKey: payload.id })
-    },
-    onDnaChange: (payload: { id: string, value: unknown }) => {
-      localRecord.var[payload.id] = payload.value
-      markRecordChanged({ runClientAssigners: true })
-      emit("field-change", { section: "var", fieldKey: payload.id, value: payload.value })
-    },
+    onBlur: () => emitVarBlur(),
   })
 
   return applyFieldAdapter("var", fieldKey, node, localRecord.var[id], vnode)

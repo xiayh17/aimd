@@ -1,24 +1,16 @@
 <script lang="ts">
 import { defineComponent, h, type PropType, type VNode } from "vue"
-import { defineAsyncComponent } from "vue"
 import type { AimdVarNode } from "@airalogy/aimd-core/types"
-import type { AimdFieldMeta } from "../types"
+import type { AimdFieldMeta, AimdTypePlugin, AimdVarInputKind } from "../types"
 import type { AimdRecorderMessages } from "../locales"
 import { getAimdRecorderScopeLabel } from "../locales"
 import {
-  getVarInputKind,
   normalizeVarTypeName,
   parseVarInputValue,
   applyVarStackWidth,
   syncAutoWrapTextareaHeight,
   toBooleanValue,
-  normalizeDateTimeValueWithTimezone,
-  type VarInputKind,
 } from "../composables/useVarHelpers"
-import { normalizeDnaSequenceValue } from "../composables/useDnaSequence"
-import type { VarInputDisplayOverride } from "../composables/useFieldRendering"
-
-const AimdDnaSequenceField = defineAsyncComponent(() => import("./AimdDnaSequenceField.vue"))
 
 export default defineComponent({
   name: "AimdVarField",
@@ -30,16 +22,18 @@ export default defineComponent({
     messages: { type: Object as PropType<AimdRecorderMessages>, required: true },
     fieldMeta: { type: Object as PropType<AimdFieldMeta | undefined>, default: undefined },
     displayValue: { type: [String, Number] as PropType<string | number>, default: "" },
+    inputKind: { type: String as PropType<AimdVarInputKind>, required: true },
+    typePlugin: { type: Object as PropType<AimdTypePlugin | undefined>, default: undefined },
     initialized: { type: Boolean, default: false },
   },
-  emits: ["change", "blur", "dna-change"],
+  emits: ["change", "blur"],
   setup(props, { emit }) {
     return () => {
       const node = props.node
       const id = node.id
       const type = node.definition?.type || "str"
       const normalizedType = normalizeVarTypeName(type)
-      const inputKind = getVarInputKind(type)
+      const inputKind = props.inputKind
       const isIntegerInput = normalizedType === "int" || normalizedType === "integer"
       const usesDecimalTextInput = inputKind === "number" && !isIntegerInput
       const meta = props.fieldMeta
@@ -49,7 +43,9 @@ export default defineComponent({
       const displayValue = props.displayValue
 
       function onVarChange(rawValue: string) {
-        const parsed = parseVarInputValue(rawValue, type, inputKind)
+        const parsed = parseVarInputValue(rawValue, type, inputKind, {
+          typePlugin: props.typePlugin,
+        })
         emit("change", { id, value: parsed, type, inputKind })
       }
 
@@ -90,21 +86,6 @@ export default defineComponent({
           control,
         ])
 
-      if (inputKind === "dna") {
-        return h(AimdDnaSequenceField, {
-          class: extraClasses,
-          varId: id,
-          modelValue: props.value,
-          disabled,
-          placeholder,
-          messages: props.messages,
-          "onUpdate:modelValue": (value: unknown) => {
-            emit("dna-change", { id, value })
-          },
-          onBlur: onVarBlur,
-        })
-      }
-
       if (inputKind === "checkbox") {
         return renderStackedVar(
           h("span", { class: "aimd-rec-inline__checkbox-row" }, [
@@ -126,7 +107,7 @@ export default defineComponent({
         )
       }
 
-      if (inputKind === "textarea") {
+      if (inputKind === "textarea" || inputKind === "dna") {
         return renderStackedVar(
           h("textarea", {
             "data-rec-focus-key": `var:${id}`,
@@ -139,7 +120,7 @@ export default defineComponent({
             onInput: (event: Event) => onVarChange((event.target as HTMLTextAreaElement).value),
             onBlur: onVarBlur,
           }),
-          "aimd-rec-inline--var-stacked--textarea",
+          inputKind === "dna" ? "aimd-rec-inline--var-stacked--dna" : "aimd-rec-inline--var-stacked--textarea",
         )
       }
 

@@ -1,6 +1,6 @@
 import { reactive, type VNode } from "vue"
 import type { AimdVarNode } from "@airalogy/aimd-core/types"
-import type { AimdFieldMeta, AimdFieldState } from "../types"
+import type { AimdFieldMeta, AimdFieldState, AimdTypePlugin, AimdTypePluginInitContext, AimdTypePluginValueContext } from "../types"
 import {
   normalizeVarTypeName,
   getVarInputKind,
@@ -10,6 +10,7 @@ import {
   type VarInputKind,
 } from "./useVarHelpers"
 import { normalizeDnaSequenceValue } from "./useDnaSequence"
+import { resolveAimdTypePlugin } from "../type-plugins"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +27,7 @@ export interface FieldRenderingOptions {
   now: () => Date | string | number | undefined
   fieldMeta: () => Record<string, AimdFieldMeta> | undefined
   fieldState: () => Record<string, AimdFieldState> | undefined
+  typePlugins: () => AimdTypePlugin[] | undefined
   wrapField: () => ((fieldKey: string, fieldType: string, defaultVNode: VNode) => VNode) | undefined
 }
 
@@ -70,9 +72,43 @@ export function useFieldRendering(options: FieldRenderingOptions) {
     return new Date()
   }
 
+  function getTypePlugin(fieldKey: string, type: string | undefined): AimdTypePlugin | undefined {
+    return resolveAimdTypePlugin(type, options.typePlugins())
+  }
+
+  function buildTypePluginInitContext(
+    node: AimdVarNode,
+    type: string | undefined,
+    fieldKey: string,
+  ): AimdTypePluginInitContext {
+    return {
+      type: type || "str",
+      normalizedType: normalizeVarTypeName(type),
+      fieldKey,
+      node,
+      fieldMeta: options.fieldMeta()?.[fieldKey],
+      currentUserName: options.currentUserName(),
+      now: options.now(),
+    }
+  }
+
+  function buildTypePluginValueContext(
+    node: AimdVarNode,
+    type: string | undefined,
+    fieldKey: string,
+    value: unknown,
+    inputKind: VarInputKind,
+  ): AimdTypePluginValueContext {
+    return {
+      ...buildTypePluginInitContext(node, type, fieldKey),
+      value,
+      inputKind,
+    }
+  }
+
   // ── Var display value ──────────────────────────────────────────────────
 
-  function getVarInitialDisplayOverride(node: AimdVarNode, type: string | undefined): VarInputDisplayOverride | null {
+  function getVarInitialDisplayOverride(node: AimdVarNode, type: string | undefined, fieldKey: string): VarInputDisplayOverride | null {
     const raw = node.definition?.defaultRaw?.trim()
     if (!raw) {
       return null
@@ -83,7 +119,13 @@ export function useFieldRendering(options: FieldRenderingOptions) {
       return null
     }
 
-    if (getVarInputKind(type) !== "number" || typeof node.definition?.default !== "number") {
+    if (
+      getVarInputKind(type, {
+        inputType: options.fieldMeta()?.[fieldKey]?.inputType,
+        typePlugin: getTypePlugin(fieldKey, type),
+      }) !== "number"
+      || typeof node.definition?.default !== "number"
+    ) {
       return null
     }
 
@@ -97,9 +139,17 @@ export function useFieldRendering(options: FieldRenderingOptions) {
     }
   }
 
-  function getVarDisplayValue(id: string, value: unknown, kind: VarInputKind): string | number {
+  function getVarDisplayValue(
+    id: string,
+    node: AimdVarNode,
+    type: string | undefined,
+    value: unknown,
+    kind: VarInputKind,
+    fieldKey: string,
+  ): string | number {
     const override = varInputDisplayOverrides[id]
     const normalized = unwrapStructuredValue(value)
+    const typePlugin = getTypePlugin(fieldKey, type)
 
     if (override) {
       if (kind === "number" && Object.is(normalized, override.expectedValue)) {
@@ -108,7 +158,13 @@ export function useFieldRendering(options: FieldRenderingOptions) {
       delete varInputDisplayOverrides[id]
     }
 
-    return getVarInputDisplayValue(value, kind)
+    if (typePlugin?.getDisplayValue) {
+      return typePlugin.getDisplayValue(
+        buildTypePluginValueContext(node, type, fieldKey, value, kind),
+      )
+    }
+
+    return getVarInputDisplayValue(value, kind, { type, typePlugin })
   }
 
   function clearVarInputDisplayOverride(id: string) {
@@ -123,7 +179,12 @@ export function useFieldRendering(options: FieldRenderingOptions) {
 
   // ── Var initial value ──────────────────────────────────────────────────
 
-  function getVarInitialValue(node: AimdVarNode, type: string | undefined): unknown {
+  function getVarInitialValue(node: AimdVarNode, type: string | undefined, fieldKey: string): unknown {
+    const typePlugin = getTypePlugin(fieldKey, type)
+    if (typePlugin?.getInitialValue) {
+      return typePlugin.getInitialValue(buildTypePluginInitContext(node, type, fieldKey))
+    }
+
     const normalizedType = normalizeVarTypeName(type)
     if (node.definition && Object.prototype.hasOwnProperty.call(node.definition, "default")) {
       if (normalizedType === "dnasequence") {
@@ -131,12 +192,37 @@ export function useFieldRendering(options: FieldRenderingOptions) {
       }
       return node.definition.default
     }
-    const inputKind = getVarInputKind(type)
+    const inputKind = getVarInputKind(type, {
+      inputType: options.fieldMeta()?.[fieldKey]?.inputType,
+      typePlugin,
+    })
     if (inputKind === "checkbox") return false
     if (inputKind === "dna") return normalizeDnaSequenceValue(undefined)
     if (normalizedType === "currenttime") return formatDateTimeWithTimezone(resolveNowDate())
     if (normalizedType === "username" && typeof options.currentUserName() === "string") return options.currentUserName()
     return ""
+  }
+
+  function normalizeVarValue(
+    node: AimdVarNode,
+    type: string | undefined,
+    fieldKey: string,
+    value: unknown,
+    inputKind: VarInputKind,
+  ): unknown {
+    const typePlugin = getTypePlugin(fieldKey, type)
+    if (typePlugin?.normalizeValue) {
+      return typePlugin.normalizeValue(
+        buildTypePluginValueContext(node, type, fieldKey, value, inputKind),
+      )
+    }
+
+    const normalizedType = normalizeVarTypeName(type)
+    if (inputKind === "dna" || normalizedType === "dnasequence") {
+      return normalizeDnaSequenceValue(value)
+    }
+
+    return value
   }
 
   function getVarPlaceholder(node: AimdVarNode): string | undefined {
@@ -168,11 +254,13 @@ export function useFieldRendering(options: FieldRenderingOptions) {
     fieldStateClasses,
     isFieldDisabled,
     resolveNowDate,
+    getTypePlugin,
     getVarInitialDisplayOverride,
     getVarDisplayValue,
     clearVarInputDisplayOverride,
     setVarInputDisplayOverride,
     getVarInitialValue,
+    normalizeVarValue,
     getVarPlaceholder,
     getAimdId,
   }

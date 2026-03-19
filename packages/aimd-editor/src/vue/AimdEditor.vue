@@ -214,6 +214,7 @@ defineExpose({
       :initial-type="aimdDialogType"
       :messages="resolvedMessages"
       :ref-suggestions="refSuggestions"
+      :var-type-plugins="varTypePlugins"
       @update:visible="showAimdDialog = $event"
       @insert="onDialogInsert"
     />

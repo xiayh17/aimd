@@ -3,9 +3,11 @@ import { ref, computed, watch } from 'vue'
 import type { AimdEditorMessages } from './locales'
 import {
   createAimdFieldTypes,
+  createAimdVarTypePresets,
   getDefaultAimdFields,
   buildAimdSyntax,
   type AimdFieldType,
+  type AimdVarTypePresetOption,
 } from './types'
 
 const props = defineProps<{
@@ -13,6 +15,7 @@ const props = defineProps<{
   initialType?: string
   messages: AimdEditorMessages
   refSuggestions?: string[]
+  varTypePlugins?: AimdVarTypePresetOption[]
 }>()
 
 const emit = defineEmits<{
@@ -33,13 +36,6 @@ interface BlankItem {
   answer: string
 }
 
-interface VarTypePresetOption {
-  key: string
-  value: string
-  label: string
-  desc: string
-}
-
 const quizChoiceOptions = ref<ChoiceOptionItem[]>([])
 const quizBlankItems = ref<BlankItem[]>([])
 const quizMultipleAnswers = ref<string[]>([])
@@ -47,19 +43,9 @@ const draggingChoiceIndex = ref<number | null>(null)
 const dragOverChoiceIndex = ref<number | null>(null)
 const formError = ref('')
 const localizedFieldTypes = computed(() => createAimdFieldTypes(props.messages))
-const varTypePresets = computed<VarTypePresetOption[]>(() => [
-  { key: 'str', value: 'str', ...props.messages.varTypePresets.str },
-  { key: 'int', value: 'int', ...props.messages.varTypePresets.int },
-  { key: 'float', value: 'float', ...props.messages.varTypePresets.float },
-  { key: 'bool', value: 'bool', ...props.messages.varTypePresets.bool },
-  { key: 'date', value: 'date', ...props.messages.varTypePresets.date },
-  { key: 'datetime', value: 'datetime', ...props.messages.varTypePresets.datetime },
-  { key: 'time', value: 'time', ...props.messages.varTypePresets.time },
-  { key: 'dnaSequence', value: 'DNASequence', ...props.messages.varTypePresets.dnaSequence },
-  { key: 'currentTime', value: 'CurrentTime', ...props.messages.varTypePresets.currentTime },
-  { key: 'userName', value: 'UserName', ...props.messages.varTypePresets.userName },
-  { key: 'airalogyMarkdown', value: 'AiralogyMarkdown', ...props.messages.varTypePresets.airalogyMarkdown },
-])
+const varTypePresets = computed<AimdVarTypePresetOption[]>(() =>
+  createAimdVarTypePresets(props.messages, props.varTypePlugins ?? []),
+)
 
 function normalizeVarTypeToken(value: string | undefined): string {
   return (value || '').trim().toLowerCase().replace(/[\s_-]/g, '')
