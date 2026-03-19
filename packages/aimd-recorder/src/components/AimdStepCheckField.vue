@@ -23,42 +23,55 @@ export const AimdStepField = defineComponent({
       const stepNumber = node.step || "?"
       const disabled = props.disabled
       const extraClasses = props.extraClasses
+      const isChecked = Boolean(state.checked)
 
       return h("span", {
-        class: ["aimd-rec-inline aimd-rec-inline--step aimd-field aimd-field--step", ...extraClasses],
+        class: [
+          "aimd-rec-step-card",
+          isChecked ? "aimd-rec-step-card--checked" : "aimd-rec-step-card--awaiting",
+          ...extraClasses,
+        ],
       }, [
-        h("label", { class: "aimd-rec-inline__check-wrap" }, [
+        // left accent bar
+        h("span", { class: "aimd-rec-step-card__bar" }),
+        // badge
+        h("label", { class: "aimd-rec-step-card__badge-wrap" }, [
           h("input", {
             "data-rec-focus-key": `step:${id}:checked`,
             type: "checkbox",
+            class: "aimd-rec-step-card__checkbox",
             disabled,
-            checked: Boolean(state.checked),
+            checked: isChecked,
             onChange: (event: Event) => {
-              emit("check-change", {
-                id,
-                value: (event.target as HTMLInputElement).checked,
-              })
+              emit("check-change", { id, value: (event.target as HTMLInputElement).checked })
             },
             onBlur: () => emit("blur", { id }),
           }),
-          h("span", { class: "aimd-field__scope" }, getAimdRecorderScopeLabel("step", props.messages)),
-          h("span", { class: "aimd-rec-inline__step-num" }, stepNumber),
-          h("span", { class: "aimd-field__name" }, id),
+          h("span", {
+            class: ["aimd-rec-step-card__badge", isChecked ? "aimd-rec-step-card__badge--checked" : ""],
+          }, [
+            isChecked
+              ? h("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "3", width: "14", height: "14" }, [
+                  h("polyline", { points: "20 6 9 17 4 12" }),
+                ])
+              : String(stepNumber),
+          ]),
         ]),
-        h("input", {
-          "data-rec-focus-key": `step:${id}:annotation`,
-          class: "aimd-rec-inline__input aimd-rec-inline__input--annotation",
-          disabled,
-          placeholder: props.messages.step.annotationPlaceholder,
-          value: state.annotation || "",
-          onInput: (event: Event) => {
-            emit("annotation-change", {
-              id,
-              value: (event.target as HTMLInputElement).value,
-            })
-          },
-          onBlur: () => emit("blur", { id }),
-        }),
+        // content
+        h("span", { class: "aimd-rec-step-card__content" }, [
+          h("span", { class: "aimd-rec-step-card__title" }, id),
+          h("input", {
+            "data-rec-focus-key": `step:${id}:annotation`,
+            class: "aimd-rec-step-card__annotation",
+            disabled,
+            placeholder: props.messages.step.annotationPlaceholder,
+            value: state.annotation || "",
+            onInput: (event: Event) => {
+              emit("annotation-change", { id, value: (event.target as HTMLInputElement).value })
+            },
+            onBlur: () => emit("blur", { id }),
+          }),
+        ]),
       ])
     }
   },
@@ -81,42 +94,54 @@ export const AimdCheckField = defineComponent({
       const state = props.state
       const disabled = props.disabled
       const extraClasses = props.extraClasses
+      const isChecked = Boolean(state.checked)
 
       return h("span", {
-        class: ["aimd-rec-inline aimd-rec-inline--check aimd-field aimd-field--check", ...extraClasses],
+        class: [
+          "aimd-rec-step-card aimd-rec-step-card--check",
+          isChecked ? "aimd-rec-step-card--checked" : "aimd-rec-step-card--awaiting",
+          ...extraClasses,
+        ],
       }, [
-        h("label", { class: "aimd-rec-inline__check-wrap" }, [
+        h("span", { class: "aimd-rec-step-card__bar" }),
+        h("label", { class: "aimd-rec-step-card__badge-wrap" }, [
           h("input", {
             "data-rec-focus-key": `check:${id}:checked`,
             type: "checkbox",
-            class: "aimd-checkbox",
+            class: "aimd-rec-step-card__checkbox",
             disabled,
-            checked: Boolean(state.checked),
+            checked: isChecked,
             onChange: (event: Event) => {
-              emit("check-change", {
-                id,
-                value: (event.target as HTMLInputElement).checked,
-              })
+              emit("check-change", { id, value: (event.target as HTMLInputElement).checked })
             },
             onBlur: () => emit("blur", { id }),
           }),
-          h("span", { class: "aimd-field__scope" }, getAimdRecorderScopeLabel("check", props.messages)),
-          h("span", { class: "aimd-field__name" }, node.label || id),
+          h("span", {
+            class: ["aimd-rec-step-card__badge aimd-rec-step-card__badge--check", isChecked ? "aimd-rec-step-card__badge--checked" : ""],
+          }, [
+            isChecked
+              ? h("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "3", width: "14", height: "14" }, [
+                  h("polyline", { points: "20 6 9 17 4 12" }),
+                ])
+              : h("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2.5", width: "14", height: "14" }, [
+                  h("polyline", { points: "20 6 9 17 4 12" }),
+                ]),
+          ]),
         ]),
-        h("input", {
-          "data-rec-focus-key": `check:${id}:annotation`,
-          class: "aimd-rec-inline__input aimd-rec-inline__input--annotation",
-          disabled,
-          placeholder: props.messages.check.annotationPlaceholder,
-          value: state.annotation || "",
-          onInput: (event: Event) => {
-            emit("annotation-change", {
-              id,
-              value: (event.target as HTMLInputElement).value,
-            })
-          },
-          onBlur: () => emit("blur", { id }),
-        }),
+        h("span", { class: "aimd-rec-step-card__content" }, [
+          h("span", { class: "aimd-rec-step-card__title" }, node.label || id),
+          h("input", {
+            "data-rec-focus-key": `check:${id}:annotation`,
+            class: "aimd-rec-step-card__annotation",
+            disabled,
+            placeholder: props.messages.check.annotationPlaceholder,
+            value: state.annotation || "",
+            onInput: (event: Event) => {
+              emit("annotation-change", { id, value: (event.target as HTMLInputElement).value })
+            },
+            onBlur: () => emit("blur", { id }),
+          }),
+        ]),
       ])
     }
   },

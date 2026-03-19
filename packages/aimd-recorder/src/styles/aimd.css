@@ -250,6 +250,145 @@
   font-size: 13px;
 }
 
+/* ========================================
+   Step / Check Card
+   ======================================== */
+
+.aimd-rec-step-card {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 14px;
+  border: 1px solid var(--aimd-step-border);
+  border-radius: 8px;
+  background: var(--aimd-step-bg);
+  overflow: hidden;
+  vertical-align: middle;
+  margin: 3px 0;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.aimd-rec-step-card--awaiting {
+  border-color: rgba(183, 119, 31, 0.3);
+  box-shadow: 0 0 0 2px rgba(183, 119, 31, 0.06);
+}
+
+.aimd-rec-step-card--checked {
+  border-color: rgba(22, 114, 79, 0.2);
+  background: rgba(247, 254, 250, 0.96);
+}
+
+/* left accent bar */
+.aimd-rec-step-card__bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, rgba(183, 119, 31, 0.9) 0%, rgba(222, 155, 58, 0.7) 100%);
+  border-radius: 8px 0 0 8px;
+  transition: background 0.18s ease;
+}
+
+.aimd-rec-step-card--checked .aimd-rec-step-card__bar {
+  background: linear-gradient(180deg, #16724f 0%, #0e5139 100%);
+}
+
+.aimd-rec-step-card--check .aimd-rec-step-card__bar {
+  background: linear-gradient(180deg, #4181fd 0%, #2563eb 100%);
+}
+
+.aimd-rec-step-card--check.aimd-rec-step-card--checked .aimd-rec-step-card__bar {
+  background: linear-gradient(180deg, #16724f 0%, #0e5139 100%);
+}
+
+/* badge */
+.aimd-rec-step-card__badge-wrap {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.aimd-rec-step-card__checkbox {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.aimd-rec-step-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(183, 119, 31, 0.9) 0%, rgba(150, 94, 20, 0.88) 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', monospace;
+  box-shadow: 0 4px 10px rgba(183, 119, 31, 0.2);
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  cursor: pointer;
+}
+
+.aimd-rec-step-card__badge--check {
+  background: linear-gradient(180deg, #4181fd 0%, #2563eb 100%);
+  box-shadow: 0 4px 10px rgba(65, 129, 253, 0.2);
+  color: rgba(255,255,255,0.5);
+}
+
+.aimd-rec-step-card__badge--checked {
+  background: linear-gradient(180deg, #16724f 0%, #0e5139 100%);
+  box-shadow: 0 4px 10px rgba(22, 114, 79, 0.2);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* content */
+.aimd-rec-step-card__content {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.aimd-rec-step-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--aimd-step-text);
+  line-height: 1.3;
+}
+
+.aimd-rec-step-card--checked .aimd-rec-step-card__title {
+  color: #16724f;
+  text-decoration: line-through;
+  text-decoration-color: rgba(22, 114, 79, 0.4);
+}
+
+.aimd-rec-step-card__annotation {
+  font-size: 12px;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed #d1d5db;
+  outline: none;
+  padding: 1px 0;
+  width: 120px;
+  transition: border-color 0.15s ease, width 0.15s ease;
+}
+
+.aimd-rec-step-card__annotation:focus {
+  border-bottom-color: var(--aimd-border-color-focus);
+  width: 180px;
+}
+
+.aimd-rec-step-card__annotation::placeholder {
+  color: #d1d5db;
+}
+
 /* Checkpoint field */
 .aimd-field--check {
   display: inline-flex;
