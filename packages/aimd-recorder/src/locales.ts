@@ -39,6 +39,22 @@ export interface AimdRecorderMessages {
     confirmAction: string
     checkedAction: string
     annotationPlaceholder: string
+    annotationToggle: string
+    estimatedDuration: (value: string) => string
+    estimatedBadge: (value: string) => string
+    remainingDuration: (value: string) => string
+    remainingBadge: (value: string) => string
+    overtimeDuration: (value: string) => string
+    overtimeBadge: (value: string) => string
+    recordedDuration: (value: string) => string
+    recordedBadge: (value: string) => string
+    protocolEstimatedTotal: (value: string) => string
+    protocolRecordedTotal: (value: string) => string
+    timerToggle: string
+    startTimer: string
+    pauseTimer: string
+    resumeTimer: string
+    resetTimer: string
   }
   check: {
     annotationPlaceholder: string
@@ -178,6 +194,22 @@ const EN_US_MESSAGES: AimdRecorderMessages = {
     confirmAction: "Confirm step",
     checkedAction: "Completed",
     annotationPlaceholder: "Notes",
+    annotationToggle: "Notes",
+    estimatedDuration: value => `Estimated: ${value}`,
+    estimatedBadge: value => `ETA ${value}`,
+    remainingDuration: value => `Remaining: ${value}`,
+    remainingBadge: value => `Remain ${value}`,
+    overtimeDuration: value => `Overtime: ${value}`,
+    overtimeBadge: value => `Overtime ${value}`,
+    recordedDuration: value => `Recorded: ${value}`,
+    recordedBadge: value => `Timer ${value}`,
+    protocolEstimatedTotal: value => `Estimated total ${value}`,
+    protocolRecordedTotal: value => `Recorded total ${value}`,
+    timerToggle: "Timer",
+    startTimer: "Start",
+    pauseTimer: "Pause",
+    resumeTimer: "Resume",
+    resetTimer: "Reset",
   },
   check: {
     annotationPlaceholder: "Check notes",
@@ -290,6 +322,22 @@ const ZH_CN_MESSAGES: AimdRecorderMessages = {
     confirmAction: "确认步骤",
     checkedAction: "已完成",
     annotationPlaceholder: "备注",
+    annotationToggle: "备注",
+    estimatedDuration: value => `预计：${value}`,
+    estimatedBadge: value => `预计 ${value}`,
+    remainingDuration: value => `剩余：${value}`,
+    remainingBadge: value => `剩余 ${value}`,
+    overtimeDuration: value => `超时：${value}`,
+    overtimeBadge: value => `超时 ${value}`,
+    recordedDuration: value => `已记录：${value}`,
+    recordedBadge: value => `计时 ${value}`,
+    protocolEstimatedTotal: value => `协议预计总时长 ${value}`,
+    protocolRecordedTotal: value => `协议已记录时长 ${value}`,
+    timerToggle: "计时",
+    startTimer: "开始",
+    pauseTimer: "暂停",
+    resumeTimer: "继续",
+    resetTimer: "重置",
   },
   check: {
     annotationPlaceholder: "检查备注",
