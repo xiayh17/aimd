@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, reactive, ref, watch, type PropType, type VNode, type VNodeChild } from "vue"
+import { computed, defineComponent, h, nextTick, onBeforeUnmount, reactive, ref, watch, type PropType, type VNode, type VNodeChild } from "vue"
 import type {
   AimdCheckNode,
   AimdClientAssignerField,
@@ -340,6 +340,52 @@ const fieldRendering = useFieldRendering({
   wrapField: () => props.wrapField,
 })
 
+function isGroupedStepBodyNode(node: unknown): node is VNode {
+  if (!node || typeof node !== "object") {
+    return false
+  }
+
+  const props = (node as VNode).props as Record<string, unknown> | null | undefined
+  if (!props) {
+    return false
+  }
+
+  const classValue = props.class
+  const classNames = Array.isArray(classValue)
+    ? classValue
+    : typeof classValue === "string"
+      ? [classValue]
+      : []
+
+  return props["data-aimd-step-body"] === "true"
+    || props["data-aimd-step-body"] === true
+    || props.dataAimdStepBody === "true"
+    || props.dataAimdStepBody === true
+    || classNames.some((className) => typeof className === "string" && className.includes("aimd-step-body"))
+}
+
+function normalizeStepBodyNodes(bodyNodes: VNodeChild[] = []): VNodeChild[] {
+  if (bodyNodes.length === 0) {
+    return []
+  }
+
+  const groupedBody = bodyNodes.find((child) => isGroupedStepBodyNode(child))
+  if (!groupedBody || typeof groupedBody !== "object" || groupedBody === null) {
+    return bodyNodes
+  }
+
+  const groupedChildren = (groupedBody as VNode).children
+  if (Array.isArray(groupedChildren)) {
+    return groupedChildren as VNodeChild[]
+  }
+
+  if (groupedChildren == null) {
+    return []
+  }
+
+  return [groupedChildren as VNodeChild]
+}
+
 // ---------------------------------------------------------------------------
 // Inline field renderers
 // ---------------------------------------------------------------------------
@@ -550,7 +596,7 @@ function renderInlineVarTable(node: AimdVarTableNode): VNode {
   return applyFieldAdapter("var_table", fieldKey, node, rows, vnode)
 }
 
-function renderInlineStep(node: AimdStepNode, children?: VNodeChild[]): VNode {
+function renderInlineStep(node: AimdStepNode, bodyNodes: VNodeChild[] = []): VNode {
   const id = node.id
   const fieldKey = `step:${id}`
   if (!(id in localRecord.step)) {
@@ -626,8 +672,8 @@ function renderInlineStep(node: AimdStepNode, children?: VNodeChild[]): VNode {
     "data-aimd-step-card": id,
   }, [
     h("div", { class: "aimd-step-card-block__header" }, [headerVnode]),
-    children && children.length > 0
-      ? h("div", { class: "aimd-step-card-block__body" }, children)
+    bodyNodes.length > 0
+      ? h("div", { class: "aimd-step-card-block__body" }, bodyNodes)
       : null,
   ])
 
@@ -720,7 +766,6 @@ async function rebuildInlineNodes(
   recordInitializedDuringRender = false
   const rendered = await renderToVue(props.content || "", {
     locale: resolvedLocale.value,
-    groupStepBodies: true,
     context: {
       mode: "edit",
       readonly: props.readonly,

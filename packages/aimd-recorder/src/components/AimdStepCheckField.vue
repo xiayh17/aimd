@@ -180,7 +180,6 @@ export const AimdStepField = defineComponent({
       const id = node.id
       const state = props.state
       const stepNumber = node.step || "?"
-      const hasCheck = Boolean(node.check)
       const disabled = props.disabled
       const extraClasses = props.extraClasses
       const isChecked = Boolean(state.checked)
@@ -269,7 +268,7 @@ export const AimdCheckField = defineComponent({
       const extraClasses = props.extraClasses
       const isChecked = Boolean(state.checked)
       const label = node.label || id
-      const checkedMessage = node.checkedMessage
+      const checkedMessage = node.checked_message
 
       return h("label", {
         class: [
