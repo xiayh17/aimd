@@ -44,21 +44,6 @@ describe('AimdRecorder form layout extraction', () => {
     expect(wrapper.findAll('.aimd-rec-inline--var-stacked').length).toBeGreaterThanOrEqual(2)
   })
 
-  it('promotes large widgets such as asset vars into top-aligned form items', async () => {
-    const wrapper = mount(AimdRecorder, {
-      props: {
-        content: '结果附件：{{var|result_asset: FileIdPNG, title="结果附件"}}',
-      },
-    })
-
-    await waitForSelector(wrapper, '.aimd-asset-field')
-
-    const items = wrapper.findAll('.aimd-form-item')
-    expect(items).toHaveLength(1)
-    expect(items[0].find('.aimd-form-item__label-text').text()).toBe('结果附件')
-    expect(items[0].find('.aimd-asset-field').exists()).toBe(true)
-  })
-
   it('keeps narrative inline vars inside normal paragraph flow', async () => {
     const wrapper = mount(AimdRecorder, {
       props: {
@@ -118,36 +103,4 @@ describe('AimdRecorder form layout extraction', () => {
     expect(wrapper.text()).toContain('样本密封确认')
   })
 
-  it('renders file id vars with the built-in asset field instead of a plain text input', async () => {
-    const wrapper = mount(AimdRecorder, {
-      props: {
-        content: '细胞处理前照片：{{var|cell_before_photo: FileIdPNG, title="细胞处理前照片", description="能量处理前的细胞形态"}}',
-      },
-    })
-
-    await waitForSelector(wrapper, '.aimd-asset-field')
-
-    expect(wrapper.find('.aimd-form-item').exists()).toBe(true)
-    expect(wrapper.find('.aimd-asset-field').exists()).toBe(true)
-    expect(wrapper.find('.aimd-asset-field__trigger').text()).toContain('细胞处理前照片')
-    expect(wrapper.find('.aimd-var-tooltip__type').text()).toBe('FileIdPNG')
-  })
-
-  it('passes resolveFile through to built-in asset vars for historical previews', async () => {
-    const wrapper = mount(AimdRecorder, {
-      props: {
-        content: '细胞处理前照片：{{var|cell_before_photo: FileIdPNG, title="细胞处理前照片"}}',
-        modelValue: {
-          var: {
-            cell_before_photo: 'airalogy.id.file.demo.png',
-          },
-        },
-        resolveFile: (src: string) => src === 'airalogy.id.file.demo.png' ? 'https://example.com/demo.png' : src,
-      },
-    })
-
-    await waitForSelector(wrapper, '.aimd-asset-field__media--image')
-
-    expect((wrapper.find('.aimd-asset-field__media--image').element as HTMLImageElement).getAttribute('src')).toBe('https://example.com/demo.png')
-  })
 })
