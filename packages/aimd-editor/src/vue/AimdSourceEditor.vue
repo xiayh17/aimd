@@ -2,8 +2,12 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import type { AimdEditorMessages } from './locales'
 import { ensureMonacoEnvironment } from './monaco-environment'
-import { resolveCodeLanguageBadge, resolveCodeLanguageLabel } from '@airalogy/aimd-renderer'
-import { parseAimdSourceBlocks, type AimdSourceBlock } from './source-blocks'
+import {
+  parseAimdSourceBlocks,
+  resolveSourceCodeLanguageBadge,
+  resolveSourceCodeLanguageLabel,
+  type AimdSourceBlock,
+} from './source-blocks'
 
 const props = defineProps<{
   content: string
@@ -50,7 +54,7 @@ function buildSourceBlockTitle(block: AimdSourceBlock): string {
       : props.resolvedMessages.sourceBlocks.serverAssigner
   }
 
-  return resolveCodeLanguageLabel(block.language)
+  return resolveSourceCodeLanguageLabel(block.language)
 }
 
 function buildSourceBlockMeta(block: AimdSourceBlock): string {
@@ -83,7 +87,7 @@ function createSourceBlockZoneNode(block: AimdSourceBlock): HTMLElement {
 
   const badge = document.createElement('span')
   badge.className = 'aimd-source-block-zone__badge'
-  badge.textContent = resolveCodeLanguageBadge(block.language)
+  badge.textContent = resolveSourceCodeLanguageBadge(block.language)
 
   header.append(titleWrap, badge)
   zone.append(header)
